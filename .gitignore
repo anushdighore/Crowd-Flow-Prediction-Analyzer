@@ -1,7 +1,30 @@
-.venv
-/backend/node_modules
-/frontend/node_modules
-/New Folder
-/frontend/.next
-/frontend/package-lock.json
-/backend/package-lock.json
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Backend (Express)
+backend/node_modules/
+backend/package-lock.json
+
+# Frontend (React or Next.js)
+frontend/node_modules/
+frontend/package-lock.json
+frontend/.next/
+frontend/build/
+frontend/dist/
+
+# VSCode
+.vscode/
+
+# Mac/OSX system files
+.DS_Store
+
+# Misc
+/New Folder/
