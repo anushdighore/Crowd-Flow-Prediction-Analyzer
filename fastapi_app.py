@@ -10,6 +10,7 @@ import time
 import logging
 from typing import Dict, Any
 import os
+# from utils.visualize import generate_heatmap_overlay
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -55,6 +56,8 @@ async def startup_event():
         model = load_tmtb_model(checkpoint_path)
         model.eval()
         model.to(device)
+
+
 
         logger.info("✅ VMamba-TMTB model loaded successfully")
 
@@ -199,6 +202,25 @@ async def global_exception_handler(request, exc):
         status_code=500,
         detail="Internal server error occurred"
     )
+
+
+@app.post("/count")
+async def count_crowd(file: UploadFile = File(...)):
+    # ... existing code ...
+    
+    # After getting density_map and original img
+    heatmap_overlay = generate_heatmap_overlay(
+        density_map=density_np,
+        original_image=img,  # Original OpenCV image
+        alpha=0.6,  # 60% heatmap visibility
+        colormap=cv2.COLORMAP_JET
+    )
+    
+    return {
+        "crowd_count": int(round(crowd_count)),
+        "heatmap_overlay": heatmap_overlay,  # New field!
+        "processing_time_ms": processing_time
+    }
 
 if __name__ == "__main__":
     import uvicorn
