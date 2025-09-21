@@ -48,19 +48,23 @@ def preprocess_frame(img: np.ndarray, target_size: int = 512) -> torch.Tensor:
         # Place resized image on canvas
         canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = img_resized
 
-        # Convert to float32 and normalize to [0, 1]
+        # CRITICAL FIX: Convert to float32 (was causing the error!)
         img_normalized = canvas.astype(np.float32) / 255.0
 
         # Apply ImageNet normalization (standard for vision models)
-        mean = np.array([0.485, 0.456, 0.406])
-        std = np.array([0.229, 0.224, 0.225])
+        # CRITICAL FIX: Ensure mean/std arrays are float32
+        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
         img_normalized = (img_normalized - mean) / std
 
         # Convert to torch tensor and change from HWC to CHW format
         img_tensor = torch.from_numpy(img_normalized).permute(2, 0, 1)
 
-        logger.debug(f"Preprocessed tensor shape: {img_tensor.shape}")
+        # CRITICAL FIX: Ensure tensor is float32
+        img_tensor = img_tensor.float()
+
+        logger.debug(f"Preprocessed tensor shape: {img_tensor.shape}, dtype: {img_tensor.dtype}")
 
         return img_tensor
 
@@ -88,7 +92,10 @@ def preprocess_batch(images: list, target_size: int = 512) -> torch.Tensor:
     # Stack into batch
     batch_tensor = torch.stack(batch_tensors, dim=0)
 
-    logger.debug(f"Batch tensor shape: {batch_tensor.shape}")
+    # CRITICAL FIX: Ensure batch is float32
+    batch_tensor = batch_tensor.float()
+
+    logger.debug(f"Batch tensor shape: {batch_tensor.shape}, dtype: {batch_tensor.dtype}")
 
     return batch_tensor
 
