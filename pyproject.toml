@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crowd_flow_analyzer"
+version = "0.1.0"
+description = "Crowd flow prediction and density counting with FastAPI"
+authors = [{ name = "Your Name", email = "you@example.com" }]
+readme = "README.md"
+requires-python = ">=3.9"
+
+[project.optional-dependencies]
+dev = ["fastapi", "uvicorn[standard]", "opencv-python", "numpy", "torch"]

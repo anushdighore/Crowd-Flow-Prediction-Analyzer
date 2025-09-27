@@ -1,11 +1,11 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from models.vmamba_tmtb import load_tmtb_model
+from models.vmamba_official import load_tmtb_model
 from utils.preprocess import preprocess_frame
 from utils.postprocess import get_count_from_density
 import cv2
 import numpy as np
-import torch
+import torch 
 import time
 import logging
 from typing import Dict, Any
@@ -209,7 +209,7 @@ async def count_crowd(file: UploadFile = File(...)):
     # ... existing code ...
     
     # After getting density_map and original img
-    heatmap_overlay = generate_heatmap_overlay(
+    heatmap_overlay = generate_heatmap_overlay( 
         density_map=density_np,
         original_image=img,  # Original OpenCV image
         alpha=0.6,  # 60% heatmap visibility
