@@ -3,10 +3,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 import io
 import logging
+import sys
+import os
 import torch
-import torchvision.transforms as transforms
 import numpy as np
+
+# Add project root to path for preprocessing import
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
 from csrnet import load_csrnet
+from preprocessing import get_csrnet_preprocessor
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -23,23 +29,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global model variable
+# Global model and preprocessor variables
 model = None
 device = None
-
-# Image preprocessing transform
-transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],  # ImageNet normalization
-        std=[0.229, 0.224, 0.225]
-    )
-])
+preprocessor = None
 
 @app.on_event("startup")
 async def load_model():
     """Load CSRNet model on startup"""
-    global model, device
+    global model, device, preprocessor
     
     logger.info("=" * 50)
     logger.info("🚀 Starting CSRNet API Server...")
@@ -49,10 +47,14 @@ async def load_model():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logger.info(f"🖥️  Using device: {device}")
     
+    # Initialize preprocessor
+    preprocessor = get_csrnet_preprocessor()
+    logger.info("✅ Preprocessor initialized (original CSRNet pipeline)")
+    
     # Load model
     checkpoint_path = "../../checkpoints/csrnet.pth"
     try:
-        model = load_csrnet(checkpoint_path=checkpoint_path, device=device)
+        model = load_csrnet(checkpoint_path=checkpoint_path, device=str(device))
         logger.info("✅ CSRNet model loaded successfully!")
         logger.info("=" * 50)
     except Exception as e:
@@ -108,10 +110,11 @@ async def count_people(file: UploadFile = File(...)):
     
     # Preprocess image
     try:
-        logger.info("🔧 Preprocessing image...")
-        image_tensor = transform(image).unsqueeze(0)  # Add batch dimension
+        logger.info("🔧 Preprocessing image (original CSRNet pipeline: no resizing)...")
+        image_tensor = preprocessor.preprocess(image)
         image_tensor = image_tensor.to(device)
-        logger.info(f"Tensor shape: {image_tensor.shape}")
+        logger.info(f"Preprocessed tensor shape: {image_tensor.shape}")
+        logger.info(f"Expected output density map: ({image_tensor.shape[2]//8}, {image_tensor.shape[3]//8})")
         
     except Exception as e:
         logger.error(f"❌ Error preprocessing image: {e}")
