@@ -56,16 +56,22 @@ def check_python_packages():
     
     return all_installed, missing_packages
 
-def check_node():
-    """Check if Node.js is installed"""
-    print("\n🟢 Checking Node.js...")
-    try:
-        result = subprocess.run(['node', '--version'], 
-                              capture_output=True, text=True, timeout=5)
-        if result.returncode == 0:
-            version = result.stdout.strip()
-            print(f"   ✅ Node.js {version}")
-            return True
+import shutil
+
+def check_npm():
+    """Check if npm is installed and available in PATH (robust)"""
+    npm_path = shutil.which("npm")
+    if npm_path:
+        try:
+            result = subprocess.run(["npm", "--version"], capture_output=True, text=True)
+            if result.returncode == 0:
+                return True, result.stdout.strip()
+            else:
+                return False, None
+        except Exception:
+            return False, None
+    else:
+        return False, None
         else:
             print("   ❌ Node.js - NOT FOUND")
             return False

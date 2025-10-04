@@ -3,3 +3,4 @@ __pycache__/
 crowd_flow_analyzer.egg-info/
 checkpoints/
 /checkpoints/
+architectures/
