@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conda Basics & Git Conflict Resolution Tutorial</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        h2 { color: #34495e; margin-top: 30px; }
+        h3 { color: #7f8c8d; }
+        h4 { color: #95a5a6; }
+        h5 { color: #bdc3c7; }
+        pre {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 15px;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+        code {
+            background-color: #f1f3f4;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Consolas', monospace;
+        }
+        pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+        .command-block {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: 'Monaco', 'Consolas', monospace;
+        }
+        ul { padding-left: 20px; }
+        li { margin: 5px 0; }
+        .tip {
+            background-color: #e8f5e8;
+            border-left: 4px solid #4caf50;
+            padding: 10px;
+            margin: 15px 0;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 10px;
+            margin: 15px 0;
+        }
+        .error {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 10px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Conda Basics & Git Conflict Resolution Tutorial</h1>
+
+<h2>Part 1: Conda Basics</h2>
+
+<p>Conda is a powerful package and environment management system that helps you manage dependencies and create isolated environments for your projects.</p>
+
+<h3>What is Conda?</h3>
+
+<p>Conda is:</p>
+<ul>
+    <li><strong>Package Manager</strong>: Installs and manages software packages</li>
+    <li><strong>Environment Manager</strong>: Creates isolated environments with different package versions</li>
+    <li><strong>Cross-platform</strong>: Works on Windows, macOS, and Linux</li>
+    <li><strong>Language Agnostic</strong>: Not just for Python (supports R, Ruby, Lua, Scala, Java, etc.)</li>
+</ul>
+
+<h3>Core Concepts</h3>
+
+<h4>1. Environments</h4>
+<ul>
+    <li>Isolated spaces where you can install specific versions of packages</li>
+    <li>Prevents conflicts between different projects</li>
+    <li>Each environment has its own Python interpreter and packages</li>
+</ul>
+
+<h4>2. Channels</h4>
+<ul>
+    <li>Repositories where packages are stored</li>
+    <li>Default channels: <code>defaults</code>, <code>conda-forge</code>, <code>bioconda</code></li>
+    <li>You can specify channels when installing packages</li>
+</ul>
+
+<h3>Essential Commands</h3>
+
+<h4>Environment Management</h4>
+
+<div class="command-block"># Create a new environment
+conda create --name myenv python=3.9
+
+# Create with specific packages
+conda create --name myenv python=3.9 numpy pandas matplotlib
+
+# Activate environment
+conda activate myenv
+
+# Deactivate environment
+conda deactivate
+
+# List all environments
+conda env list
+conda info --envs
+
+# Remove environment
+conda env remove --name myenv
+conda remove --name myenv --all</div>
+
+<h4>Package Management</h4>
+
+<div class="command-block"># Install packages in current environment
+conda install numpy
+conda install numpy pandas matplotlib
+
+# Install from specific channel
+conda install -c conda-forge scikit-learn
+
+# Install specific version
+conda install python=3.8.5
+conda install numpy=1.19.2
+
+# Update packages
+conda update numpy
+conda update --all
+
+# Remove packages
+conda remove numpy
+
+# List installed packages
+conda list
+
+# Search for packages
+conda search numpy</div>
+
+<h4>Environment Information</h4>
+
+<div class="command-block"># Show conda information
+conda info
+
+# Show current environment info
+conda info --envs
+
+# Show package info
+conda info numpy</div>
+
+<h4>Export/Import Environments</h4>
+
+<div class="command-block"># Export environment to YAML file
+conda env export > environment.yml
+
+# Create environment from YAML file
+conda env create -f environment.yml
+
+# Export package list only
+conda list --export > requirements.txt
+
+# Create from requirements file
+conda create --name myenv --file requirements.txt</div>
+
+<h3>Best Practices</h3>
+
+<h4>1. Use Environment Files</h4>
+<p>Create an <code>environment.yml</code> file for your projects:</p>
+
+<pre><code>name: myproject
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - numpy
+  - pandas
+  - matplotlib
+  - pip
+  - pip:
+    - some-pip-only-package</code></pre>
+
+<h4>2. Channel Priority</h4>
+<ul>
+    <li>Use <code>conda-forge</code> for most packages (more up-to-date)</li>
+    <li>Specify channels explicitly for reproducibility</li>
+</ul>
+
+<div class="command-block">conda install -c conda-forge -c bioconda mypackage</div>
+
+<h4>3. Environment Naming</h4>
+<ul>
+    <li>Use descriptive names: <code>web-scraping</code>, <code>ml-project</code>, <code>data-analysis</code></li>
+    <li>Include version numbers if needed: <code>pytorch-1.9</code></li>
+</ul>
+
+<h4>4. Keep Base Environment Clean</h4>
+<ul>
+    <li>Don't install packages in the base environment</li>
+    <li>Create separate environments for each project</li>
+</ul>
+
+<h3>Common Workflows</h3>
+
+<h4>Starting a New Project</h4>
+<div class="command-block"># 1. Create environment
+conda create --name myproject python=3.9
+
+# 2. Activate it
+conda activate myproject
+
+# 3. Install packages
+conda install numpy pandas matplotlib jupyter
+
+# 4. Export for sharing
+conda env export > environment.yml</div>
+
+<h4>Working with Existing Project</h4>
+<div class="command-block"># 1. Create from environment file
+conda env create -f environment.yml
+
+# 2. Activate
+conda activate projectname
+
+# 3. Start working!</div>
+
+<h4>Updating Your Environment</h4>
+<div class="command-block"># Activate environment
+conda activate myproject
+
+# Update specific package
+conda update numpy
+
+# Update all packages
+conda update --all
+
+# Export updated environment
+conda env export > environment.yml</div>
+
+<h3>Troubleshooting Tips</h3>
+
+<h4>1. Solving Environment Issues</h4>
+<div class="command-block"># Clean conda cache
+conda clean --all
+
+# Check for conflicts
+conda update --all --dry-run
+
+# Force reinstall
+conda install --force-reinstall numpy</div>
+
+<h4>2. Mixed pip and conda</h4>
+<ul>
+    <li>Install conda packages first</li>
+    <li>Use pip only for packages not available in conda</li>
+    <li>Include pip packages in environment.yml under <code>pip:</code> section</li>
+</ul>
+
+<h4>3. Environment Not Found</h4>
+<div class="command-block"># Refresh environment list
+conda info --envs
+
+# Check if conda is in PATH
+conda --version</div>
+
+<h3>Advanced Features</h3>
+
+<h4>1. Environment Variables</h4>
+<div class="command-block"># Set environment variables
+conda env config vars set MY_VAR=value
+
+# List environment variables
+conda env config vars list</div>
+
+<h4>2. Creating Custom Channels</h4>
+<div class="command-block"># Add custom channel
+conda config --add channels mychannel
+
+# Remove channel
+conda config --remove channels mychannel</div>
+
+<h4>3. Conda Configuration</h4>
+<div class="command-block"># Show configuration
+conda config --show
+
+# Set default channels
+conda config --add channels conda-forge</div>
+
+<h2>Part 2: How to Resolve Git Merge Conflicts</h2>
+
+<p>Merge conflicts occur when Git cannot automatically merge changes from different branches. Here's how to resolve them:</p>
+
+<h3>Understanding Conflict Markers</h3>
+<p>When conflicts occur, Git adds special markers to the conflicted files:</p>
+
+<pre><code><<<<<<< HEAD
+Your local changes
+=======
+Remote/incoming changes
+>>>>>>> branch-name</code></pre>
+
+<ul>
+    <li><code>&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD</code>: Start of your local changes</li>
+    <li><code>=======</code>: Separator between versions</li>
+    <li><code>&gt;&gt;&gt;&gt;&gt;&gt;&gt; branch-name</code>: End of incoming changes</li>
+</ul>
+
+<h3>Step-by-Step Resolution Process</h3>
+
+<h4>1. Check Conflict Status</h4>
+<div class="command-block"># See which files have conflicts
+git status
+
+# See detailed conflict information
+git diff</div>
+
+<h4>2. Choose Your Resolution Strategy</h4>
+
+<h5>Option A: Accept All Remote Changes (Fast)</h5>
+<div class="command-block"># Abort current merge and reset to remote
+git merge --abort
+git reset --hard origin/main
+
+# Or use checkout strategy
+git checkout --theirs .</div>
+
+<h5>Option B: Accept All Local Changes</h5>
+<div class="command-block"># Keep your local version for all conflicts
+git checkout --ours .
+git add .
+git commit -m "Resolve conflicts keeping local changes"</div>
+
+<h5>Option C: Manual Resolution (Most Control)</h5>
+<div class="command-block"># Open each conflicted file and edit manually
+# Remove conflict markers and choose/combine changes
+# Then stage and commit:
+git add filename.py
+git commit -m "Resolve merge conflict in filename.py"</div>
+
+<h3>Common Conflict Scenarios</h3>
+
+<h4>1. Simple Content Conflict</h4>
+<p><strong>Before (in file):</strong></p>
+<pre><code><<<<<<< HEAD
+print("Hello from local")
+=======
+print("Hello from remote")
+>>>>>>> origin/main</code></pre>
+
+<p><strong>After (choose one):</strong></p>
+<pre><code>print("Hello from local")  # Keep local
+# OR
+print("Hello from remote") # Keep remote
+# OR
+print("Hello from both")   # Combine/modify</code></pre>
+
+<h4>2. Import/Dependency Conflicts</h4>
+<p><strong>Before:</strong></p>
+<pre><code><<<<<<< HEAD
+from models.vmamba_tmtb import load_model
+=======
+from models.vmamba_official import load_model
+>>>>>>> origin/main</code></pre>
+
+<p><strong>Resolution:</strong> Choose the correct import path based on your project structure.</p>
+
+<h3>Using VS Code for Conflict Resolution</h3>
+<p>VS Code provides a great interface for resolving conflicts:</p>
+<ul>
+    <li>Click "Accept Current Change" (your version)</li>
+    <li>Click "Accept Incoming Change" (remote version)</li>
+    <li>Click "Accept Both Changes" (combine both)</li>
+    <li>Click "Compare Changes" to see differences side-by-side</li>
+</ul>
+
+<h3>Advanced Conflict Resolution Tools</h3>
+
+<h4>Using Git Mergetool</h4>
+<div class="command-block"># Configure a merge tool (one-time setup)
+git config --global merge.tool vimdiff
+# or
+git config --global merge.tool vscode
+
+# Launch merge tool for conflicts
+git mergetool
+
+# After resolving, commit
+git commit -m "Resolve merge conflicts"</div>
+
+<h4>Cherry-pick Specific Changes</h4>
+<div class="command-block"># If you want specific commits from remote
+git cherry-pick commit-hash
+
+# Resolve any conflicts, then
+git add .
+git cherry-pick --continue</div>
+
+<h3>Prevention Strategies</h3>
+
+<h4>1. Regular Pulls</h4>
+<div class="command-block"># Pull frequently to minimize conflicts
+git pull origin main
+
+# Or use rebase to keep history clean
+git pull --rebase origin main</div>
+
+<h4>2. Feature Branches</h4>
+<div class="command-block"># Work on feature branches
+git checkout -b feature/my-feature
+# Make changes, then merge carefully
+git checkout main
+git pull origin main
+git merge feature/my-feature</div>
+
+<h4>3. Communication</h4>
+<ul>
+    <li>Coordinate with team members on file changes</li>
+    <li>Use smaller, frequent commits</li>
+    <li>Avoid force-pushing to shared branches</li>
+</ul>
+
+<h3>Emergency Conflict Recovery</h3>
+
+<h4>If You Mess Up During Resolution</h4>
+<div class="command-block"># Abort merge and start over
+git merge --abort
+
+# Or reset to last known good state
+git reset --hard HEAD~1
+
+# Check reflog to find lost commits
+git reflog
+git reset --hard HEAD@{n}</div>
+
+<h4>Recover Lost Work</h4>
+<div class="command-block"># Find lost commits
+git reflog
+
+# Recover specific commit
+git cherry-pick lost-commit-hash
+
+# Or create new branch from lost commit
+git branch recover-branch lost-commit-hash</div>
+
+<div class="warning">
+    <strong>Warning:</strong> <code>git reset --hard</code> permanently deletes uncommitted changes. Use with caution!
+</div>
+
+<div class="error">
+    <strong>Danger Zone:</strong> <code>git push --force</code> can overwrite others' work. Use <code>--force-with-lease</code> instead.
+</div>
+
+<div class="tip">
+    <strong>Pro Tips:</strong>
+    <ul>
+        <li>When in doubt, make a backup branch: <code>git branch backup-before-merge</code></li>
+        <li>Use <code>git status</code> frequently to understand what's happening</li>
+        <li>Practice conflict resolution on test repositories first</li>
+        <li>Learn your editor's merge conflict tools - they make life easier!</li>
+    </ul>
+</div>
+
+</body>
+</html>
