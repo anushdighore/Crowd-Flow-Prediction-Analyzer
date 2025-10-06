@@ -212,7 +212,6 @@ data/
 finetune_vmamba.py
 models/official/__init__.py
 notebooks/
-requirements.txt
 resume_training.bat
 saved_models/
 scripts/
