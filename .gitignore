@@ -183,6 +183,9 @@ cython_debug/
 checkpoints/
 architectures/
 
+# Submodules with untracked content
+architectures/CSRNet-pytorch/
+
 # Project-specific ignores
 ALTERNATIVE_MODELS.md
 CHECKLIST_VMAMBA.md
