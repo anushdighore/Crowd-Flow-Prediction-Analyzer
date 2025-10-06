@@ -1,4 +1,21 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useMemo } from "react";
+
+const normaliseCount = (payload) => {
+  if (!payload) return null;
+  const candidates = [payload.count, payload.crowd_count, payload.people];
+  for (const value of candidates) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return Math.round(value);
+    }
+    if (typeof value === "string") {
+      const parsed = Number(value);
+      if (!Number.isNaN(parsed)) {
+        return Math.round(parsed);
+      }
+    }
+  }
+  return null;
+};
 
 function CSRNetUploader() {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -7,6 +24,8 @@ function CSRNetUploader() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const fileInputRef = useRef(null);
+
+  const displayCount = useMemo(() => normaliseCount(results), [results]);
 
   // Handle file selection
   const handleFileSelect = (event) => {
@@ -77,7 +96,11 @@ function CSRNetUploader() {
 
       const data = await response.json();
       console.log("Response from backend:", data);
-      setResults(data);
+      const normalized = {
+        ...data,
+        count: normaliseCount(data),
+      };
+      setResults(normalized);
     } catch (err) {
       console.error("Upload error:", err);
       setError(`Failed to process image: ${err.message}`);
@@ -202,7 +225,7 @@ function CSRNetUploader() {
               margin: "20px 0",
             }}
           >
-            {results.count} People
+            {displayCount !== null ? displayCount : "—"} People
           </div>
 
           <div

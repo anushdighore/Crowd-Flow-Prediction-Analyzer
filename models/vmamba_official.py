@@ -1,8 +1,10 @@
-import torch
 import logging
-from typing import Optional
+import importlib
 import sys
-import os
+from pathlib import Path
+from typing import Optional
+
+import torch
 
 logger = logging.getLogger(__name__)
 
@@ -10,20 +12,31 @@ def load_tmtb_model(checkpoint_path: str, device: Optional[str] = None):
     """Load official VMamba-TMTB model"""
     try:
         # Add official model path
-        current_dir = os.path.dirname(__file__)
-        official_path = os.path.join(current_dir, 'official')
-        
-        # Add to Python path
-        if official_path not in sys.path:
-            sys.path.insert(0, official_path)
-        
-        # FIXED: Use absolute imports instead of relative
-        try:
-            from model import mamba  # Direct import from official files
-        except ImportError:
-            # Alternative: try importing the specific components
-            import model
-            mamba = model.mamba
+        current_dir = Path(__file__).resolve().parent
+        project_root = current_dir.parent
+        if str(project_root) not in sys.path:
+            sys.path.insert(0, str(project_root))
+
+        candidate_modules = [
+            'architectures.taste_more_taste_better.model.model',
+            'models.official.model',
+        ]
+
+        mamba = None
+        selected_module = None
+        for module_name in candidate_modules:
+            try:
+                module = importlib.import_module(module_name)
+                mamba = getattr(module, 'mamba')
+                selected_module = module_name
+                break
+            except (ImportError, AttributeError):
+                continue
+
+        if mamba is None:
+            raise ImportError("Unable to locate VMamba architecture module")
+
+        logger.info(f"Using VMamba architecture from: {selected_module}")
         
         logger.info(f"Loading official VMamba-TMTB from: {checkpoint_path}")
         
@@ -31,31 +44,59 @@ def load_tmtb_model(checkpoint_path: str, device: Optional[str] = None):
             device = "cuda" if torch.cuda.is_available() else "cpu"
         
         # Create model exactly like the official test.py
-        model = mamba(25)  # 25 classes as confirmed
-        
-        # Load checkpoint 
+        model = mamba(num_classes=25, vmamba_path=None, strict_backbone=False)
+
         checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+
+        if isinstance(checkpoint, dict):
+            if 'state_dict' in checkpoint:
+                state_dict = checkpoint['state_dict']
+            elif 'model' in checkpoint:
+                state_dict = checkpoint['model']
+            else:
+                state_dict = {
+                    key.replace('module.', ''): value
+                    for key, value in checkpoint.items()
+                    if isinstance(value, torch.Tensor)
+                }
+        else:
+            state_dict = checkpoint
+
+        # Fix checkpoint key naming: decoder -> count in reg_head
+        # The checkpoint was trained with CountingHead that used self.decoder
+        # but current architecture uses self.count
+        from collections import OrderedDict
+        corrected_state_dict = OrderedDict()
+        keys_renamed = 0
+        for key, value in state_dict.items():
+            if 'reg_head.count.decoder' in key:
+                new_key = key.replace('reg_head.count.decoder', 'reg_head.count.count')
+                corrected_state_dict[new_key] = value
+                keys_renamed += 1
+            else:
+                corrected_state_dict[key] = value
         
-        # Load state dict - this should load ALL parameters!
-        missing_keys, unexpected_keys = model.load_state_dict(checkpoint, strict=False)
+        if keys_renamed > 0:
+            logger.info(f"🔧 Fixed {keys_renamed} checkpoint keys (decoder->count)")
+            state_dict = corrected_state_dict
+
+        missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
         
         # Count parameters
         total_params = sum(p.numel() for p in model.parameters())
-        loaded_params = total_params - len(missing_keys) * 1000  # Rough estimate
-        
         logger.info(f"✅ Official model loaded: {total_params:,} parameters")
         if missing_keys:
             logger.info(f"⚠️ Missing {len(missing_keys)} keys (this is normal)")
         if unexpected_keys:
             logger.info(f"⚠️ Unexpected {len(unexpected_keys)} keys (this is normal)")
-        
+
         model.to(device)
         model.eval()
-        
+
         logger.info("🚀 Official VMamba-TMTB ready for inference!")
-        
-        return ModelWrapper(model)
-        
+
+        return model
+
     except ImportError as e:
         logger.error(f"Import error: {e}")
         logger.error("Trying alternative import strategy...")
@@ -75,29 +116,5 @@ def load_tmtb_model(checkpoint_path: str, device: Optional[str] = None):
     except Exception as e:
         logger.error(f"Failed to load official model: {e}")
         raise
-
-class ModelWrapper:
-    """Wrapper to maintain compatibility"""
-    def __init__(self, model):
-        self.model = model
-    
-    def forward(self, x, return_cls=False):
-        with torch.no_grad():
-            try:
-                if return_cls:
-                    outputs, cls_score = self.model(x)
-                    return outputs, cls_score
-                else:
-                    outputs = self.model(x)[0]
-                    return outputs
-            except Exception as e:
-                logger.error(f"Forward pass error: {e}")
-                # Return dummy output to prevent crash
-                batch_size = x.shape[0]
-                h, w = x.shape[2] // 4, x.shape[3] // 4
-                return torch.zeros(batch_size, 1, h, w)
-    
-    def __call__(self, x, return_cls=False):
-        return self.forward(x, return_cls)
 
 __all__ = ['load_tmtb_model']

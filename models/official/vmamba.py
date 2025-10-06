@@ -2,6 +2,7 @@ import os
 import time
 import math
 import copy
+import warnings
 from functools import partial
 from typing import Optional, Callable, Any
 from collections import OrderedDict
@@ -11,25 +12,57 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 from einops import rearrange, repeat
-from timm.models.layers import DropPath, trunc_normal_
-from fvcore.nn import FlopCountAnalysis, flop_count_str, flop_count, parameter_count
+from timm.models.layers import DropPath, trunc_normal_  # type: ignore
+from fvcore.nn import FlopCountAnalysis, flop_count_str, flop_count, parameter_count  # type: ignore
 DropPath.__repr__ = lambda self: f"timm.DropPath({self.drop_prob})"
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.deterministic = True
 
+from .csms6s import (
+    CrossScan,
+    CrossMerge,
+    CrossScan_Ab_1direction,
+    CrossMerge_Ab_1direction,
+    CrossScan_Ab_2direction,
+    CrossMerge_Ab_2direction,
+    SelectiveScanMamba,
+    SelectiveScanCore,
+    SelectiveScanOflex,
+    flops_selective_scan_fn,
+    flops_selective_scan_ref,
+    selective_scan_flop_jit,
+)
+
+has_triton_kernels = False
+triton_import_error = None
+
 try:
-    from .csm_triton import CrossScanTriton, CrossMergeTriton, CrossScanTriton1b1
-    from .csms6s import CrossScan, CrossMerge
-    from .csms6s import CrossScan_Ab_1direction, CrossMerge_Ab_1direction, CrossScan_Ab_2direction, CrossMerge_Ab_2direction
-    from .csms6s import SelectiveScanMamba, SelectiveScanCore, SelectiveScanOflex
-    from .csms6s import flops_selective_scan_fn, flops_selective_scan_ref, selective_scan_flop_jit
-except:
-    from csm_triton import CrossScanTriton, CrossMergeTriton, CrossScanTriton1b1
-    from csms6s import CrossScan, CrossMerge
-    from csms6s import CrossScan_Ab_1direction, CrossMerge_Ab_1direction, CrossScan_Ab_2direction, CrossMerge_Ab_2direction
-    from csms6s import SelectiveScanMamba, SelectiveScanCore, SelectiveScanOflex
-    from csms6s import flops_selective_scan_fn, flops_selective_scan_ref, selective_scan_flop_jit
+    from .csm_triton import CrossScanTriton, CrossMergeTriton, CrossScanTriton1b1  # type: ignore
+    has_triton_kernels = True
+except Exception as exc:
+    triton_import_error = exc
+    try:
+        from csm_triton import CrossScanTriton, CrossMergeTriton, CrossScanTriton1b1  # type: ignore
+        has_triton_kernels = True
+    except Exception as exc_pkg:
+        triton_import_error = exc_pkg
+        CrossScanTriton = CrossScan  # type: ignore
+        CrossMergeTriton = CrossMerge  # type: ignore
+
+        class _CrossScanFlatten:
+            @staticmethod
+            def apply(x: torch.Tensor) -> torch.Tensor:
+                B, K, C, H, W = x.shape
+                return x.view(B, K, C, -1)
+
+        CrossScanTriton1b1 = _CrossScanFlatten  # type: ignore[misc]
+
+        warnings.warn(
+            "Triton cross-scan kernels could not be imported; falling back to PyTorch implementations. "
+            f"Reason: {triton_import_error}",
+            RuntimeWarning,
+        )
 
 # =====================================================
 # we have this class as linear and conv init differ from each other

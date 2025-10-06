@@ -53,11 +53,10 @@ async def startup_event():
         logger.info(f"🔧 Using device: {device}")
 
         # Load model
-        model = load_tmtb_model(checkpoint_path)
+        map_location = str(device)
+        model = load_tmtb_model(checkpoint_path, device=map_location)
         model.eval()
         model.to(device)
-
-
 
         logger.info("✅ VMamba-TMTB model loaded successfully")
 
@@ -138,10 +137,10 @@ async def count_crowd(file: UploadFile = File(...)) -> Dict[str, Any]:
 
         # Preprocess image for model input
         start_preprocess = time.time()
-        input_tensor = preprocess_frame(img)
+        input_tensor = preprocess_frame(img, max_long_edge=1280)
 
-        # Add batch dimension and move to device
-        input_tensor = input_tensor.unsqueeze(0).to(device)
+        # Move to device
+        input_tensor = input_tensor.to(device)
         preprocess_time = (time.time() - start_preprocess) * 1000
 
         logger.info(f"⚙️ Preprocessing completed: {input_tensor.shape} tensor")
@@ -149,21 +148,36 @@ async def count_crowd(file: UploadFile = File(...)) -> Dict[str, Any]:
         # Run model inference
         start_inference = time.time()
         with torch.no_grad():
-            density_map = model(input_tensor)
+            outputs = model(input_tensor)
         inference_time = (time.time() - start_inference) * 1000
 
-        logger.info(f"🧠 Inference completed: {density_map.shape} density map")
+        if isinstance(outputs, (tuple, list)):
+            density_map = outputs[0]
+            cls_scores = outputs[1] if len(outputs) > 1 else None
+        else:
+            density_map = outputs
+            cls_scores = None
+
+        if isinstance(density_map, (tuple, list)):
+            density_map = density_map[0]
+
+        logger.info(f"🧠 Inference completed: {tuple(density_map.shape)} density map")
 
         # Convert density map to crowd count
         start_postprocess = time.time()
-        density_np = density_map.squeeze().cpu().numpy()
+        density_tensor = density_map
+        if density_tensor.ndim == 4:
+            density_tensor = density_tensor.squeeze(0).squeeze(0)
+        elif density_tensor.ndim == 3:
+            density_tensor = density_tensor.squeeze(0)
+        density_np = density_tensor.detach().cpu().numpy()
         crowd_count = get_count_from_density(density_np)
         postprocess_time = (time.time() - start_postprocess) * 1000
 
         total_processing_time = preprocess_time + inference_time + postprocess_time
 
         # Prepare response
-        response = {
+        response: Dict[str, Any] = {
             "crowd_count": int(round(crowd_count)),
             "processing_time_ms": round(total_processing_time, 2),
             "timing_breakdown": {
@@ -177,6 +191,13 @@ async def count_crowd(file: UploadFile = File(...)) -> Dict[str, Any]:
                 "dimensions": f"{img.shape[1]}x{img.shape[0]}"  # W x H
             }
         }
+
+        if cls_scores is not None:
+            response["classification_logits"] = (
+                cls_scores.squeeze().detach().cpu().tolist()
+                if isinstance(cls_scores, torch.Tensor)
+                else cls_scores
+            )
 
         logger.info(f"✅ Count completed: {crowd_count} people detected in {total_processing_time:.2f}ms")
 
@@ -202,26 +223,6 @@ async def global_exception_handler(request, exc):
         status_code=500,
         detail="Internal server error occurred"
     )
-
-
-@app.post("/count")
-async def count_crowd(file: UploadFile = File(...)):
-    # ... existing code ...
-    
-    # After getting density_map and original img
-    heatmap_overlay = generate_heatmap_overlay( 
-        density_map=density_np,
-        original_image=img,  # Original OpenCV image
-        alpha=0.6,  # 60% heatmap visibility
-        colormap=cv2.COLORMAP_JET
-    )
-    
-    return {
-        "crowd_count": int(round(crowd_count)),
-        "heatmap_overlay": heatmap_overlay,  # New field!
-        "processing_time_ms": processing_time
-    }
-
 if __name__ == "__main__":
     import uvicorn
 

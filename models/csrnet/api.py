@@ -3,24 +3,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 import io
 import logging
-import sys
-import os
 import torch
+import torchvision.transforms as transforms
 import numpy as np
-
-# Add project root to path for preprocessing import
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-
 from csrnet import load_csrnet
-from preprocessing import get_csrnet_preprocessor
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="CSRNet Crowd Counting API")
 
-# Allow CORS for local frontend
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
@@ -29,126 +26,125 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global model and preprocessor variables
+# Global variables
 model = None
 device = None
-preprocessor = None
+
+# Preprocessing transform - EXACTLY as per CSRNet paper
+transform = transforms.Compose([
+    transforms.ToTensor(),  # Converts [0,255] to [0.0, 1.0]
+    transforms.Normalize(
+        mean=[0.485, 0.456, 0.406],  # ImageNet mean
+        std=[0.229, 0.224, 0.225]     # ImageNet std
+    )
+])
+
 
 @app.on_event("startup")
 async def load_model():
-    """Load CSRNet model on startup"""
-    global model, device, preprocessor
+    """Load model on startup"""
+    global model, device
     
-    logger.info("=" * 50)
     logger.info("🚀 Starting CSRNet API Server...")
-    logger.info("=" * 50)
     
     # Detect device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    logger.info(f"🖥️  Using device: {device}")
-    
-    # Initialize preprocessor
-    preprocessor = get_csrnet_preprocessor()
-    logger.info("✅ Preprocessor initialized (original CSRNet pipeline)")
+    logger.info(f"🖥️  Device: {device}")
     
     # Load model
-    checkpoint_path = "../../checkpoints/csrnet.pth"
+    checkpoint_path = "./checkpoint/csrnet.pth"
     try:
-        model = load_csrnet(checkpoint_path=checkpoint_path, device=str(device))
-        logger.info("✅ CSRNet model loaded successfully!")
-        logger.info("=" * 50)
+        model = load_csrnet(checkpoint_path, device=device)
+        logger.info("✅ Model loaded successfully!")
     except Exception as e:
         logger.error(f"❌ Failed to load model: {e}")
-        logger.error("💡 Make sure checkpoints/csrnet.pth exists!")
         raise
+
 
 @app.get("/")
 async def root():
-    """Health check endpoint"""
+    """Health check"""
     return {
         "status": "running",
-        "message": "CSRNet Crowd Counting API is active",
+        "message": "CSRNet Crowd Counting API",
         "model_loaded": model is not None,
         "device": str(device)
     }
 
+
 @app.post("/count")
 async def count_people(file: UploadFile = File(...)):
     """
-    Count people in uploaded image using CSRNet
+    Count people in uploaded image
     
-    Args:
-        file: Uploaded image file
-        
     Returns:
-        JSON with crowd count and metadata
+        JSON with crowd count
     """
-    logger.info("=" * 50)
-    logger.info("📸 IMAGE RECEIVED!")
-    logger.info(f"Filename: {file.filename}")
-    logger.info(f"Content Type: {file.content_type}")
+    logger.info("="*60)
+    logger.info(f"📸 Received: {file.filename}")
     
     # Validate file type
     if not file.content_type.startswith("image/"):
-        raise HTTPException(
-            status_code=400, 
-            detail="Invalid file type. Please upload an image."
-        )
+        raise HTTPException(400, "Invalid file type")
     
-    # Read and load image
+    # Load image
     try:
         contents = await file.read()
-        logger.info(f"File size: {len(contents)} bytes")
-        
         image = Image.open(io.BytesIO(contents)).convert("RGB")
-        width, height = image.size
-        logger.info(f"Image dimensions: {width}x{height}")
-        
+        orig_width, orig_height = image.size
+        logger.info(f"📐 Image size: {orig_width}x{orig_height}")
     except Exception as e:
         logger.error(f"❌ Error loading image: {e}")
-        raise HTTPException(status_code=400, detail="Could not read image file.")
+        raise HTTPException(400, "Could not read image")
     
-    # Preprocess image
+    # Preprocess
     try:
-        logger.info("🔧 Preprocessing image (original CSRNet pipeline: no resizing)...")
-        image_tensor = preprocessor.preprocess(image)
+        logger.info("🔧 Preprocessing...")
+        image_tensor = transform(image).unsqueeze(0)  # Add batch dim
         image_tensor = image_tensor.to(device)
-        logger.info(f"Preprocessed tensor shape: {image_tensor.shape}")
-        logger.info(f"Expected output density map: ({image_tensor.shape[2]//8}, {image_tensor.shape[3]//8})")
-        
+        logger.info(f"   Tensor shape: {list(image_tensor.shape)}")
+        logger.info(f"   Tensor range: [{image_tensor.min():.3f}, {image_tensor.max():.3f}]")
     except Exception as e:
-        logger.error(f"❌ Error preprocessing image: {e}")
-        raise HTTPException(status_code=500, detail="Image preprocessing failed.")
+        logger.error(f"❌ Preprocessing failed: {e}")
+        raise HTTPException(500, "Preprocessing failed")
     
-    # Run inference
+    # Inference
     try:
-        logger.info("🧠 Running CSRNet inference...")
+        logger.info("🧠 Running inference...")
         
         with torch.no_grad():
-            model.eval()
+            model.eval()  # Ensure eval mode
             density_map = model(image_tensor)
-            crowd_count = density_map.sum().item()
+        
+        # Get count
+        crowd_count = density_map.sum().item()
+        
+        logger.info(f"   Density map shape: {list(density_map.shape)}")
+        logger.info(f"   Density map range: [{density_map.min().item():.4f}, {density_map.max().item():.4f}]")
+        logger.info(f"   Raw count: {crowd_count:.2f}")
         
         # Round to nearest integer
         crowd_count = int(round(crowd_count))
         
-        logger.info(f"✅ Predicted count: {crowd_count}")
-        logger.info("=" * 50)
+        logger.info(f"✅ Final count: {crowd_count}")
+        logger.info("="*60)
         
         return {
             "success": True,
             "count": crowd_count,
-            "image_size": f"{width}x{height}",
-            "filename": file.filename,
-            "density_map_shape": list(density_map.shape)
+            "image_size": f"{orig_width}x{orig_height}",
+            "filename": file.filename
         }
         
     except Exception as e:
-        logger.error(f"❌ Error during inference: {e}")
-        raise HTTPException(status_code=500, detail=f"Inference failed: {str(e)}")
+        logger.error(f"❌ Inference failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"Inference failed: {str(e)}")
+
 
 @app.get("/health")
-async def health_check():
+async def health():
     """Detailed health check"""
     return {
         "status": "healthy",
@@ -156,6 +152,7 @@ async def health_check():
         "device": str(device),
         "device_type": "GPU" if torch.cuda.is_available() else "CPU"
     }
+
 
 if __name__ == "__main__":
     import uvicorn

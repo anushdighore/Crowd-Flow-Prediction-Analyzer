@@ -1,3 +1,5 @@
+from typing import Optional, Dict, Any
+
 import torch
 import torch.nn as nn
 from timm.models.layers import trunc_normal_
@@ -6,7 +8,7 @@ from .counting_head import CountingHead
 
 
 class MAMBA4CC(nn.Module):
-    def __init__(self, vmamba_path, num_classes):
+    def __init__(self, vmamba_path: Optional[str] = None, num_classes: int = 25, strict_backbone: bool = True):
         super().__init__()
         self.vmamba = VSSM(
             depths=[2, 2, 15, 2],
@@ -26,8 +28,23 @@ class MAMBA4CC(nn.Module):
             patchembed_version="v2",
             # norm_layer="ln2d",
         )
-        checkpoint = torch.load(vmamba_path, "cpu", weights_only=False)
-        self.vmamba.load_state_dict(checkpoint["model"])
+        if vmamba_path:
+            checkpoint = torch.load(vmamba_path, map_location="cpu", weights_only=False)
+            if isinstance(checkpoint, dict):
+                state_dict: Dict[str, Any]
+                if "model" in checkpoint:
+                    state_dict = checkpoint["model"]
+                elif "state_dict" in checkpoint:
+                    state_dict = checkpoint["state_dict"]
+                else:
+                    state_dict = {
+                        key.split("vmamba.", 1)[1] if key.startswith("vmamba.") else key: value
+                        for key, value in checkpoint.items()
+                        if isinstance(value, torch.Tensor) and key.startswith("vmamba.")
+                    }
+                self.vmamba.load_state_dict(state_dict, strict=strict_backbone)
+            else:
+                self.vmamba.load_state_dict(checkpoint, strict=strict_backbone)
         _NORMLAYERS = dict(
             ln=nn.LayerNorm,
             ln2d=LayerNorm2d,
@@ -90,6 +107,6 @@ class MAMBA4CC(nn.Module):
         return pred_den, cls_score
 
 
-def mamba(num_classes):
-    model = MAMBA4CC("vssm_base_0229_ckpt_epoch_237.pth", num_classes)
+def mamba(num_classes: int = 25, vmamba_path: Optional[str] = None, strict_backbone: bool = True):
+    model = MAMBA4CC(vmamba_path=vmamba_path, num_classes=num_classes, strict_backbone=strict_backbone)
     return model

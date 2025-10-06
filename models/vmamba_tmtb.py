@@ -145,4 +145,9 @@ def load_tmtb_model(checkpoint_path: str, device: Optional[str] = None):
         logger.error(f"Failed to create model: {e}")
         raise RuntimeError(f"Could not create VMamba-TMTB model: {e}")
 
-__all__ = ['VMambaTMTB', 'load_tmtb_model']
+
+# Alias for compatibility with code expecting load_vmamba_tmtb
+def load_vmamba_tmtb(checkpoint_path: str, device: Optional[str] = None):
+    return load_tmtb_model(checkpoint_path, device)
+
+__all__ = ['VMambaTMTB', 'load_tmtb_model', 'load_vmamba_tmtb']
