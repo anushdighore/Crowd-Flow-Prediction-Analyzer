@@ -43,7 +43,22 @@ crowdenv/
 .ipynb_checkpoints
 *.ipynb_checkpoints/
 
-# PyTorch
+# PyTorch Models
+# Ignore trained/corrected models (too large for Git)
+ml/models/*.pth
+ml/models/*.pt
+ml/models/*.ckpt
+ml/models/*.safetensors
+
+# Keep original checkpoints (can use Git LFS if large)
+ml/checkpoints/*.pth
+ml/checkpoints/*.pt
+
+# Keep directory structure
+!ml/models/.gitkeep
+!ml/checkpoints/.gitkeep
+
+# Old model files pattern (backwards compatibility)
 *.pth
 *.pt
 *.ckpt

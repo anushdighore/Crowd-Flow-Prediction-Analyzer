@@ -22,11 +22,11 @@ async def health():
 
 @router.post("/count")
 async def count(file: UploadFile = File(...)):
-    """Count endpoint - matches frontend expectation"""
+    """Count endpoint - config-driven sizing for uploads"""
     try:
         contents = await file.read()
         image = Image.open(io.BytesIO(contents))
-        result = csrnet_api.predict(image, max_size=800)  # Optimize for speed
+        result = csrnet_api.predict(image, source="image")  # Uses config for upload sizing
         return {
             "status": "success",
             "count": result["rounded_count"],
@@ -47,11 +47,11 @@ async def predict(file: UploadFile = File(...)):
 
 @router.post("/webcam")
 async def webcam_count(file: UploadFile = File(...)):
-    """Webcam frame count endpoint - faster processing"""
+    """Webcam frame count endpoint - config-driven sizing for real-time"""
     try:
         contents = await file.read()
         image = Image.open(io.BytesIO(contents))
-        result = csrnet_api.predict(image, max_size=640)  # Smaller for real-time
+        result = csrnet_api.predict(image, source="webcam")  # Uses config for webcam sizing
         return {
             "status": "success",
             "count": result["rounded_count"],

@@ -10,7 +10,6 @@ from PIL import Image
 import io
 import sys
 from pathlib import Path
-import torch
 
 # Add ml/src to path
 ml_path = Path(__file__).parent.parent.parent / "ml" / "src"
@@ -18,32 +17,10 @@ if str(ml_path) not in sys.path:
     sys.path.insert(0, str(ml_path))
 
 from models.csrnet import api as csrnet_api
-from models.tmtb.vmamba_official import load_tmtb_model
+from models.tmtb import api as tmtb_api
 
 # Import API router
 from app.api import api_router
-
-# Global TMTB model cache
-_tmtb_model = None
-_tmtb_device = None
-_tmtb_transform = None
-
-
-def get_tmtb_model():
-    """Get or initialize TMTB model"""
-    global _tmtb_model, _tmtb_device, _tmtb_transform
-    if _tmtb_model is None:
-        import torchvision.transforms as transforms
-        _tmtb_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        checkpoint_path = Path(__file__).parent.parent / "ml" / "checkpoints" / "jhu_5.pth"
-        _tmtb_model = load_tmtb_model(str(checkpoint_path), device=str(_tmtb_device))
-        _tmtb_model.eval()
-        _tmtb_transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ])
-        logger.info("✅ TMTB model loaded for WebSocket")
-    return _tmtb_model, _tmtb_transform, _tmtb_device
 
 # Configure logging
 logging.basicConfig(
@@ -131,26 +108,12 @@ async def websocket_count(websocket: WebSocket):
             
             # Run prediction based on selected model
             if model_type.lower() == "tmtb":
-                # Use TMTB model
-                tmtb_model, tmtb_transform, tmtb_device = get_tmtb_model()
-                image_tensor = tmtb_transform(image).unsqueeze(0).to(tmtb_device)
-                
-                with torch.no_grad():
-                    output = tmtb_model(image_tensor)
-                    if isinstance(output, tuple):
-                        density_map = output[0]
-                    else:
-                        density_map = output
-                    count = density_map.sum().item()
-                
-                result = {
-                    "count": round(count),
-                    "inference_time_ms": 0  # TMTB doesn't track time yet
-                }
+                # Use TMTB model (lazy-loaded) - config-driven sizing
+                result = tmtb_api.predict(image, source="webcam")
                 model_name = "TMTB"
             else:
                 # Use CSRNet (default)
-                result = csrnet_api.predict(image, max_size=640)
+                result = csrnet_api.predict(image, source="webcam")
                 model_name = "CSRNet"
             
             frame_number += 1
