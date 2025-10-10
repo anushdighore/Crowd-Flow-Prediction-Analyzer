@@ -124,12 +124,12 @@ A **complete end-to-end crowd counting system** with TWO operational modes:
           │ /count                     │ /ws/count
           │                            │
 ┌─────────┴────────────────────────────┴──────────────────┐
-│              FastAPI Backend (Port 8000)                 │
+│              FastAPI Backend (Port 8000)                │
 │  ┌──────────────┐          ┌──────────────┐            │
 │  │fastapi_app.py│          │webcam_app.py │            │
 │  └──────┬───────┘          └──────┬───────┘            │
-│         └────────────┬─────────────┘                    │
-│                      │                                   │
+│         └────────────┬─────────────┘                   │
+│                      │                                  │
 │         ┌────────────▼────────────┐                     │
 │         │  Preprocessing Utils    │                     │
 │         │  (utils/preprocess.py)  │                     │
