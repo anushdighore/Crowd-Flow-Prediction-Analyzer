@@ -581,7 +581,7 @@ npm start
 python -c "import torch; print(torch.cuda.is_available())"
 
 # Check model file integrity
-ls -la ml/models/tmtb_jhu_corrected.pth
+ls -la ml/fine-tunned-models/tmtb_jhu_corrected.pth
 
 # Check config files
 python -c "from ml.src.core.config_loader import load_csrnet_config; print('Config OK')"

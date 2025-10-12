@@ -45,17 +45,17 @@ crowdenv/
 
 # PyTorch Models
 # Ignore trained/corrected models (too large for Git)
-ml/models/*.pth
-ml/models/*.pt
-ml/models/*.ckpt
-ml/models/*.safetensors
+ml/fine-tunned-models/*.pth
+ml/fine-tunned-models/*.pt
+ml/fine-tunned-models/*.ckpt
+ml/fine-tunned-models/*.safetensors
 
 # Keep original checkpoints (can use Git LFS if large)
 ml/checkpoints/*.pth
 ml/checkpoints/*.pt
 
 # Keep directory structure
-!ml/models/.gitkeep
+!ml/fine-tunned-models/.gitkeep
 !ml/checkpoints/.gitkeep
 
 # Old model files pattern (backwards compatibility)
@@ -74,6 +74,9 @@ data/external/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/external/.gitkeep
+
+# Allow frontend models
+!frontend/src/models/
 
 # Datasets (large files)
 *.h5

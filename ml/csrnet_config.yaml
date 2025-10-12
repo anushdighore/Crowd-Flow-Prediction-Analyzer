@@ -1,0 +1,154 @@
+# CSRNet Training Configuration for ShanghaiTech Part A
+# Fine-tuning configuration
+
+training:
+  # Dataset settings
+  dataset:
+    name: "shanghaitech_part_a"
+    dataset_root: "D:\\College\\Major Project\\ml\\datasets\\raw\\ShanghaiTech\\ShanghaiTech"
+    density_root: "D:\\College\\Major Project\\ml\\datasets\\processed\\shanghaiTech"
+    part: "A" # Part A (dense crowds) or Part B (sparse crowds)
+
+  # Training hyperparameters
+  hyperparameters:
+    epochs: 30
+    batch_size: 1 # RTX 3050 6GB: keep small to avoid OOM
+    accumulate_grad_batches: 8 # Effective batch_size = 1 × 8 = 8
+    learning_rate: 1.0e-5
+    weight_decay: 5.0e-4
+    use_amp: true # Mixed precision training (FP16)
+
+    # Optimizer
+    optimizer: "adam"
+    optimizer_params:
+      betas: [0.9, 0.999]
+      eps: 1.0e-8
+
+    # Learning rate scheduler
+    lr_scheduler: "step"
+    lr_step_size: 30 # Decay every 30 epochs
+    lr_gamma: 0.5 # Multiply LR by 0.5
+
+  # Loss function
+  loss:
+    type: "mse" # Mean Squared Error
+
+  # Data augmentation (training only)
+  augmentation:
+    enabled: true
+    random_horizontal_flip: 0.5
+    color_jitter:
+      brightness: 0.2
+      contrast: 0.2
+      saturation: 0.2
+    random_crop: false # CSRNet works with full images
+
+  # DataLoader settings
+  dataloader:
+    num_workers: 4 # Optimal for i5 13th Gen (12 threads) - parallel data loading
+    pin_memory: true
+    shuffle_train: true
+    shuffle_test: false
+
+# Model settings
+model:
+  # Starting checkpoint
+  pretrained_checkpoint: "ml/checkpoints/csrnet.pth" 
+
+  # Architecture
+  architecture:
+    frontend: "vgg16"
+    backend: "dilated_conv"
+    output_channels: 1
+
+  # Load pre-trained weights
+  load_pretrained: true # Start from existing checkpoint
+
+# Checkpoint management
+checkpointing:
+  # Save checkpoints
+  save_dir: "ml/fine-tunned/csrnet"
+  save_frequency: 5 # Save every 5 epochs
+  save_best: true # Save best model based on validation loss
+  keep_last_n: 3 # Keep last 3 checkpoints
+
+  # Checkpoint naming
+  checkpoint_pattern: "csrnet_epoch_{epoch:03d}_loss_{loss:.4f}.pth"
+  best_checkpoint_name: "csrnet_best.pth"
+
+  # Resume from checkpoint
+  resume_training: false
+  resume_checkpoint: null # Path to checkpoint to resume from
+
+# Validation settings
+validation:
+  # Validation frequency
+  validate_every: 5 # Validate every 5 epochs
+
+  # Early stopping
+  early_stopping:
+    enabled: true
+    patience: 10 # Stop if no improvement for 10 validations
+    min_delta: 0.01 # Minimum change to qualify as improvement
+
+# Logging
+logging:
+  # Log directory
+  log_dir: "ml/src/csrnet/training/logs"
+
+  # TensorBoard
+  tensorboard:
+    enabled: true
+    log_dir: "ml/src/csrnet/training/logs/tensorboard"
+
+  # Console logging
+  console:
+    log_every_n_batches: 10 # Print loss every 10 batches
+    show_progress_bar: true
+
+  # File logging
+  file:
+    enabled: true
+    log_file: "training.log"
+    level: "INFO"
+
+  # What to log
+  metrics:
+    - "train_loss"
+    - "val_loss"
+    - "val_mae"
+    - "val_mse"
+    - "learning_rate"
+    - "epoch_time"
+    - "gpu_memory"
+
+# Evaluation metrics
+metrics:
+  # Metrics to compute during validation
+  - name: "mae"
+    description: "Mean Absolute Error"
+  - name: "mse"
+    description: "Mean Squared Error"
+  - name: "rmse"
+    description: "Root Mean Squared Error"
+
+# Device settings
+device:
+  # Use CUDA if available
+  cuda: true
+  # Multi-GPU training
+  multi_gpu: false
+  gpu_ids: [0]
+
+# Reproducibility
+reproducibility:
+  seed: 42
+  deterministic: false # Set to true for full reproducibility (slower)
+  benchmark: true # cudnn.benchmark for faster training
+
+# System
+system:
+  # Number of CPU workers
+  num_workers: 2
+  # Pin memory for faster data transfer to GPU
+  pin_memory: true

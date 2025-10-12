@@ -28,7 +28,7 @@ ml/
   - `jhu_5.pth` - Original TMTB checkpoint from JHU-Crowd++ paper
   - `csrnet.pth` - Original CSRNet checkpoint from ShanghaiTech
 
-### `ml/models/` - Trained/Corrected Models
+### `ml/fine-tunned-models/` - Trained/Corrected Models
 
 - Store **your trained, fine-tuned, or corrected** models
 - **Read-write** - safe to modify and experiment
@@ -44,12 +44,12 @@ ml/
 ### .gitignore Configuration
 
 ```gitignore
-# Ignore all models in ml/models/ (too large)
-ml/models/*.pth
-ml/models/*.pt
+# Ignore all models in ml/fine-tunned-models/ (too large)
+ml/fine-tunned-models/*.pth
+ml/fine-tunned-models/*.pt
 
 # Keep directory structure
-!ml/models/.gitkeep
+!ml/fine-tunned-models/.gitkeep
 !ml/checkpoints/.gitkeep
 
 # Optional: Ignore checkpoints too (use Git LFS or download script)
@@ -69,10 +69,10 @@ ml/checkpoints/*.pth
 
    ```bash
    # Upload to cloud
-   aws s3 cp ml/models/tmtb_jhu_corrected.pth s3://your-bucket/
+   aws s3 cp ml/fine-tunned-models/tmtb_jhu_corrected.pth s3://your-bucket/
 
    # Or Google Drive
-   rclone copy ml/models/ gdrive:models/
+   rclone copy ml/fine-tunned-models/ gdrive:models/
 
    # Share download link in README
    ```
@@ -95,7 +95,7 @@ model = load_tmtb_model(str(checkpoint_path), device='cuda')
 import torch
 from pathlib import Path
 
-models_dir = Path('ml/models')
+models_dir = Path('ml/fine-tunned-models')
 models_dir.mkdir(exist_ok=True)
 
 # Save your trained model
@@ -111,7 +111,7 @@ from pathlib import Path
 from models.tmtb.vmamba_official import load_tmtb_model
 
 # Load your corrected/trained model
-model_path = Path('ml/models/tmtb_jhu_corrected.pth')
+model_path = Path('ml/fine-tunned-models/tmtb_jhu_corrected.pth')
 model = load_tmtb_model(str(model_path), device='cuda')
 ```
 
@@ -121,22 +121,22 @@ If you have existing models in wrong locations:
 
 ```bash
 # Move to correct location
-mv ml/checkpoints/my_trained_model.pth ml/models/
-mv ml/checkpoints/jhu_5_corrected.pth ml/models/tmtb_jhu_corrected.pth
+mv ml/checkpoints/my_trained_model.pth ml/fine-tunned-models/
+mv ml/checkpoints/jhu_5_corrected.pth ml/fine-tunned-models/tmtb_jhu_corrected.pth
 
 # Keep only original checkpoints in ml/checkpoints/
-# Everything else goes to ml/models/
+# Everything else goes to ml/fine-tunned-models/
 ```
 
 ## 📊 File Size Guidelines
 
-| File Type                  | Typical Size        | Storage         |
-| -------------------------- | ------------------- | --------------- |
-| Original TMTB checkpoint   | ~336 MB             | ml/checkpoints/ |
-| Original CSRNet checkpoint | ~60 MB              | ml/checkpoints/ |
-| Corrected checkpoints      | Same as original    | ml/models/      |
-| Training checkpoints       | Varies              | ml/models/      |
-| Fine-tuned models          | Similar to original | ml/models/      |
+| File Type                  | Typical Size        | Storage                |
+| -------------------------- | ------------------- | ---------------------- |
+| Original TMTB checkpoint   | ~336 MB             | ml/checkpoints/        |
+| Original CSRNet checkpoint | ~60 MB              | ml/checkpoints/        |
+| Corrected checkpoints      | Same as original    | ml/fine-tunned-models/ |
+| Training checkpoints       | Varies              | ml/fine-tunned-models/ |
+| Fine-tuned models          | Similar to original | ml/fine-tunned-models/ |
 
 ## ✅ Verification
 
@@ -172,7 +172,7 @@ if models_dir.exists():
 
 - **2-architecture_model_checks.ipynb** - Updated to use this structure
 - **6-tmtb-check.ipynb** - Uses ml/checkpoints/ for loading
-- **.gitignore** - Configured to ignore ml/models/\*.pth
+- **.gitignore** - Configured to ignore ml/fine-tunned-models/\*.pth
 
 ---
 
