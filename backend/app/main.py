@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from PIL import Image
 import io
 
@@ -53,6 +54,8 @@ origins = [
     "http://127.0.0.1:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://192.168.1.6:3000",
+    "http://192.168.1.6:5173",
 ]
 
 app.add_middleware(
@@ -68,6 +71,11 @@ app.add_middleware(
 app.include_router(camera_router, prefix="/api", tags=["camera"])
 app.include_router(hls_router, prefix="/api", tags=["hls"])
 app.include_router(api_camera.router, prefix="/api", tags=["camera"])
+
+# Mount static files for HLS segments
+hls_static_dir = Path(__file__).parent.parent / "static" / "hls"
+hls_static_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/streams", StaticFiles(directory=str(hls_static_dir)), name="streams")
 
 # Add Prometheus metrics
 instrumentator = Instrumentator()

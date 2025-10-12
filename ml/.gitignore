@@ -1,0 +1,4 @@
+datasets/
+checkpoints/
+logs/
+.env

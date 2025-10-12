@@ -9,6 +9,7 @@ import asyncio
 import logging
 import time
 from typing import Optional
+import cv2
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse

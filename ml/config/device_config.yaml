@@ -1,0 +1,57 @@
+# Device Configuration
+# Defines device priority, fallback behavior, and resource limits
+
+device:
+  # Device selection priority order
+  # Priority: cuda_extension > cuda > cpu
+  preferred: "cuda" # Options: "cuda", "cpu", "auto"
+
+  # Enable automatic fallback if preferred device fails
+  fallback: true
+
+  # Maximum VRAM usage in MB (for GPU)
+  # RTX 3050 6GB Laptop: Safe limit is 4500MB (leaves headroom)
+  max_vram_mb: 4500
+
+  # Minimum free VRAM required before loading model (MB)
+  min_free_vram_mb: 1000
+
+  # Run benchmark on initialization to measure performance
+  benchmark_on_init: false
+
+  # Cache benchmark results to avoid re-running
+  cache_benchmark: true
+
+# CUDA-specific settings
+cuda:
+  # Enable CUDA extensions if available (mamba-ssm, etc.)
+  use_extensions: true
+
+  # Enable mixed precision (FP16) on supported GPUs
+  mixed_precision: false
+
+  # CUDA memory allocation strategy
+  memory_fraction: 0.9 # Use up to 90% of available VRAM
+
+  # Enable CUDA graphs for inference optimization
+  use_cuda_graphs: false
+
+# CPU-specific settings
+cpu:
+  # Number of threads for CPU inference
+  # 0 = auto-detect optimal thread count
+  num_threads: 0
+
+  # Enable MKL optimization (Intel CPUs)
+  use_mkl: true
+
+# Monitoring and logging
+monitoring:
+  # Log device info on startup
+  log_device_info: true
+
+  # Track VRAM usage during inference
+  track_vram: true
+
+  # Log performance metrics
+  log_performance: true

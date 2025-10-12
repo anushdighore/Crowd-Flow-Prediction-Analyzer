@@ -4,24 +4,6 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
 
 # Virtual Environments
 venv/
@@ -30,6 +12,7 @@ ENV/
 env.bak/
 venv.bak/
 crowdenv/
+.python-version
 
 # IDEs
 .vscode/
@@ -39,56 +22,31 @@ crowdenv/
 *~
 .DS_Store
 
-# Jupyter Notebook
-.ipynb_checkpoints
-*.ipynb_checkpoints/
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
 
-# PyTorch Models
-# Ignore trained/corrected models (too large for Git)
-ml/fine-tunned-models/*.pth
-ml/fine-tunned-models/*.pt
-ml/fine-tunned-models/*.ckpt
-ml/fine-tunned-models/*.safetensors
-
-# Keep original checkpoints (can use Git LFS if large)
-ml/checkpoints/*.pth
-ml/checkpoints/*.pt
-
-# Keep directory structure
-!ml/fine-tunned-models/.gitkeep
-!ml/checkpoints/.gitkeep
-
-# Old model files pattern (backwards compatibility)
+# Model Weights (large files)
 *.pth
 *.pt
 *.ckpt
 *.safetensors
-# Except pretrained checkpoints
-!saved_models/checkpoints/pretrained/*.pth
-!saved_models/checkpoints/pretrained/*.pt
-
-# Data
-data/raw/*
-data/processed/*
-data/external/*
-!data/raw/.gitkeep
-!data/processed/.gitkeep
-!data/external/.gitkeep
-
-
-# Datasets (large files)
 *.h5
 *.hdf5
-*.mat
 *.pkl
 *.pickle
 
-# Model outputs
-saved_models/final/*
-saved_models/checkpoints/*
-!saved_models/checkpoints/pretrained/
-!saved_models/final/.gitkeep
-!saved_models/checkpoints/.gitkeep
+# Directories
+build/
+dist/
+*.egg-info/
+.eggs/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
 
 # Logs
 logs/
@@ -97,140 +55,38 @@ runs/
 wandb/
 lightning_logs/
 
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.hypothesis/
-
-# Documentation
-docs/_build/
-docs/_static/
-docs/_templates/
-site/
-
-# Environment variables
+# Environment
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
-# OS
-Thumbs.db
-.DS_Store
-*.bak
+# Project Specific
+data/raw/
+data/processed/
+data/external/
+!data/*/.gitkeep
+
+saved_models/
+!saved_models/checkpoints/pretrained/
+!saved_models/.gitkeep
 
 # Temporary files
 temp/
 tmp/
 *.tmp
 *.swp
-
-# Output files
-outputs/
-results/
-predictions/
-visualizations/
-
-# Compiled files
-*.pyc
-*.pyo
-*.pyd
-
-# C extensions
-*.so
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-
-
-
-# Config overrides (local development)
-config/config.local.yaml
-config/secrets.yaml
+*.bak
 
 # Large files
 *.zip
 *.tar.gz
 *.rar
 
-# Profiling
-*.prof
-*.lprof
+# Frontend
+node_modules/
+.next/
+out/
 
-# MyPy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre
-.pyre/
-
-# pytype
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# Old structure files (can remove after migration)
-checkpoints/
-architectures/
-
-# Submodules with untracked content
-architectures/CSRNet-pytorch/
-
-# Project-specific ignores
-ALTERNATIVE_MODELS.md
-CHECKLIST_VMAMBA.md
-CHECKPOINT_ALTERNATIVES.md
-CHECKPOINT_PROBLEM_SOLVED.md
-CUDA_EXTENSION_ISSUE.md
-DATASET_PREPARATION.md
-KAGGLE_SETUP.md
-PROGRESS_SUMMARY.md
-QUICKSTART_VMAMBA.md
-QUICK_FIX.md
-README.md
-README_VMAMBA_FINETUNING.md
-TEMPORARY_VGG16_SOLUTION.md
-TEST_FINETUNED_MODEL.md
-VMAMBA_FINETUNING_SUMMARY.md
-WEIGHT_LOADING_ANALYSIS.md
-WHY_FINETUNE_VMAMBA.md
-
-# Project directories and notebooks
-config/
-create_density_maps.py
-data/
-finetune_vmamba.py
-models/official/__init__.py
-notebooks/
-resume_training.bat
-saved_models/
-scripts/
-src/
-start_training.bat
-test_current_model.bat
-tests/
-utils/architecture_model_checks.ipynb
-utils/backend_api_tests.ipynb
-utils/checkpoint_inspection.ipynb
-utils/checkpoint_snapshot.json
-utils/csrnet/
-visualize_results.py
+# Project specific
+target/
+test_*.py

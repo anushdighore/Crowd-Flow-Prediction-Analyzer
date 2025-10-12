@@ -1,0 +1,144 @@
+# Crowd Flow Prediction Analyzer - Configuration File
+# =================================================
+
+# Project Metadata
+project:
+  name: "Crowd Flow Prediction Analyzer"
+  version: "1.0.0"
+  description: "Multi-model crowd counting and flow prediction system"
+
+# Data Configuration
+data:
+  raw_dir: "data/raw/datasets"
+  processed_dir: "data/processed"
+  external_dir: "data/external"
+
+  # Dataset specific
+  shanghaitech:
+    root: "data/raw/datasets/ShanghaiTech/ShanghaiTech"
+    part_a: "data/raw/datasets/ShanghaiTech/ShanghaiTech/part_A"
+    part_b: "data/raw/datasets/ShanghaiTech/ShanghaiTech/part_B"
+
+  # Image processing
+  image:
+    input_size: [512, 512]
+    normalization:
+      mean: [0.485, 0.456, 0.406]
+      std: [0.229, 0.224, 0.225]
+    augmentation:
+      enabled: true
+      random_crop: true
+      horizontal_flip: true
+      color_jitter: false
+
+# Model Configuration
+models:
+  # Model paths
+  architectures_dir: "src/models/architectures"
+  saved_models_dir: "saved_models"
+  checkpoints_dir: "saved_models/checkpoints"
+  final_models_dir: "saved_models/final"
+
+  # Available models
+  available:
+    - vmamba_tmtb
+    - vmamba_official
+    - csrnet
+    - mcnn
+    - yolov8
+
+  # Default model
+  default: "vmamba_tmtb"
+
+  # Model-specific configs
+  vmamba_tmtb:
+    checkpoint: "saved_models/checkpoints/pretrained/jhu_5.pth"
+    num_classes: 25
+    backbone: "vmamba"
+
+  csrnet:
+    checkpoint: "saved_models/checkpoints/pretrained/csrnet.pth"
+    backend: "vgg16"
+
+# Training Configuration
+training:
+  device: "cuda" # cuda or cpu
+  seed: 42
+  num_workers: 4
+  pin_memory: true
+
+  # Logging
+  log_interval: 10
+  save_interval: 100
+  tensorboard: true
+  wandb: false
+
+# Inference Configuration
+inference:
+  device: "cuda"
+  batch_size: 1
+  confidence_threshold: 0.5
+  output_dir: "outputs"
+  save_visualizations: true
+
+# API Configuration
+api:
+  host: "0.0.0.0"
+  port: 8000
+  debug: false
+  reload: false
+  workers: 1
+
+  # CORS
+  cors:
+    enabled: true
+    origins:
+      - "http://localhost:3000"
+      - "http://localhost:5173"
+
+  # Rate limiting
+  rate_limit:
+    enabled: true
+    calls: 100
+    period: 60 # seconds
+
+# Logging Configuration
+logging:
+  level: "INFO" # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/app.log"
+  console: true
+
+# Camera Configuration
+camera:
+  default_url: "http://192.168.1.6:8080/video"
+  timeout: 15.0
+  verify_ssl: false
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+
+# HLS Streaming Configuration
+hls:
+  output_dir: "static/hls"
+  variants:
+    - width: 1280
+      height: 720
+      bitrate: "2000k"
+    - width: 854
+      height: 480
+      bitrate: "1000k"
+    - width: 640
+      height: 360
+      bitrate: "500k"
+  segment_duration: 4
+  window_size: 6
+  cleanup_interval: 60
+  stream_timeout: 3600
+
+# ML Configuration
+ml:
+  default_model: "csrnet"
+  models:
+    csrnet:
+      enabled: true
+    tmtb:
+      enabled: true

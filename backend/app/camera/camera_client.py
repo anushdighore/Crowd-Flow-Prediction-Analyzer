@@ -52,46 +52,92 @@ class CameraClient:
         Returns:
             Optional[np.ndarray]: Decoded image frame or None if failed
         """
-        try:
-            session = await self.get_session()
-            async with session.get(
-                camera_url,
-                headers=self.headers,
-                ssl=self.ssl,
-                timeout=self.timeout
-            ) as resp:
-                if resp.status != 200:
-                    logger.error(f"Camera returned status {resp.status}")
-                    return None
+        # Try multiple URL variations if the base URL fails
+        urls_to_try = [camera_url]
+        
+        # Add common camera URL patterns
+        if not any(x in camera_url for x in ['/video', '/shot', '/photo', '/image']):
+            urls_to_try.extend([
+                f"{camera_url}/video",
+                f"{camera_url}/shot.jpg",
+                f"{camera_url}/photo.jpg",
+            ])
+        
+        last_error = None
+        
+        for url in urls_to_try:
+            try:
+                session = await self.get_session()
+                async with session.get(
+                    url,
+                    headers=self.headers,
+                    ssl=self.ssl,
+                    timeout=self.timeout
+                ) as resp:
+                    if resp.status != 200:
+                        logger.debug(f"Camera returned status {resp.status} for {url}")
+                        continue
+                        
+                    content_type = resp.headers.get('Content-Type', '')
                     
-                content_type = resp.headers.get('Content-Type', '')
-                if 'image' not in content_type:
-                    logger.error(f"Unexpected content type: {content_type}")
-                    return None
-                
-                img_data = await resp.read()
-                if not img_data:
-                    logger.error("Received empty image data")
-                    return None
+                    # Handle MJPEG streams - read first frame
+                    if 'multipart' in content_type.lower():
+                        logger.info(f"Detected MJPEG stream at {url}")
+                        # Read until we find JPEG data
+                        chunk_size = 4096
+                        buffer = b''
+                        async for chunk in resp.content.iter_chunked(chunk_size):
+                            buffer += chunk
+                            # Look for JPEG markers
+                            start = buffer.find(b'\xff\xd8')  # JPEG start
+                            end = buffer.find(b'\xff\xd9')    # JPEG end
+                            
+                            if start != -1 and end != -1 and end > start:
+                                img_data = buffer[start:end+2]
+                                frame = cv2.imdecode(
+                                    np.frombuffer(img_data, dtype=np.uint8),
+                                    cv2.IMREAD_COLOR
+                                )
+                                if frame is not None and frame.size > 0:
+                                    logger.info(f"✅ Successfully got frame from {url}")
+                                    return frame
+                                buffer = buffer[end+2:]
+                            
+                            if len(buffer) > 1024 * 1024:  # 1MB limit
+                                break
                     
-                frame = cv2.imdecode(
-                    np.frombuffer(img_data, dtype=np.uint8),
-                    cv2.IMREAD_COLOR
-                )
-                
-                if frame is None or frame.size == 0:
-                    logger.error("Failed to decode image data")
-                    return None
+                    # Handle regular image
+                    elif 'image' in content_type:
+                        img_data = await resp.read()
+                        if not img_data:
+                            logger.debug(f"Received empty image data from {url}")
+                            continue
+                            
+                        frame = cv2.imdecode(
+                            np.frombuffer(img_data, dtype=np.uint8),
+                            cv2.IMREAD_COLOR
+                        )
+                        
+                        if frame is not None and frame.size > 0:
+                            logger.info(f"✅ Successfully got frame from {url}")
+                            return frame
+                    else:
+                        logger.debug(f"Unexpected content type: {content_type} from {url}")
+                        continue
                     
-                return frame
-                
-        except asyncio.TimeoutError:
-            logger.error(f"Timeout while connecting to camera: {camera_url}")
-        except aiohttp.ClientError as e:
-            logger.error(f"Error connecting to camera {camera_url}: {str(e)}")
-        except Exception as e:
-            logger.error(f"Unexpected error processing frame from {camera_url}: {str(e)}", exc_info=True)
-            
+            except asyncio.TimeoutError:
+                last_error = f"Timeout while connecting to {url}"
+                logger.debug(last_error)
+            except aiohttp.ClientError as e:
+                last_error = f"Error connecting to {url}: {str(e)}"
+                logger.debug(last_error)
+            except Exception as e:
+                last_error = f"Unexpected error processing frame from {url}: {str(e)}"
+                logger.debug(last_error)
+        
+        # If we get here, all attempts failed
+        logger.error(f"❌ Failed to get frame from camera. Last error: {last_error}")
+        logger.error(f"   Tried URLs: {urls_to_try}")
         return None
 
 # Create a single instance of the camera client

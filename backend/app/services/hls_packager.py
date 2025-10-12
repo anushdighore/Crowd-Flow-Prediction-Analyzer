@@ -56,84 +56,61 @@ class HLSPackager:
         }
 
     async def _run_ffmpeg(self, session: StreamSession) -> asyncio.subprocess.Process:
-        """Build and start the ffmpeg HLS pipeline."""
+        """Build and start a simple ffmpeg HLS pipeline for MJPEG/HTTP streams."""
         paths = self._paths(session)
         paths["seg_dir"].mkdir(parents=True, exist_ok=True)
 
-        # Input tuning: robust probing and RTSP-over-TCP if applicable
-        input_kwargs = {
-            "rtsp_transport": "tcp",
-            "fflags": "nobuffer",
-            "flags": "low_delay",
-            "stimeout": "5000000",      # 5s in microseconds (for some inputs like RTSP)
-            "analyzeduration": "10M",
-            "probesize": "32M",
-        }
+        # Simple command for MJPEG camera streams
+        cmd = [
+            'ffmpeg',
+            '-re',  # Read input at native frame rate
+            '-i', session.camera_url,  # Input URL
+            '-c:v', 'libx264',  # Video codec
+            '-preset', 'veryfast',  # Encoding speed
+            '-tune', 'zerolatency',  # Low latency
+            '-g', '60',  # GOP size (keyframe every 2 seconds at 30fps)
+            '-sc_threshold', '0',  # Disable scene change detection
+            '-b:v', '2000k',  # Video bitrate
+            '-maxrate', '2000k',
+            '-bufsize', '4000k',
+            '-f', 'hls',  # HLS format
+            '-hls_time', str(session.segment_duration),  # Segment duration
+            '-hls_list_size', str(session.window_size),  # Playlist size
+            '-hls_flags', 'delete_segments+independent_segments',  # HLS flags
+            '-hls_segment_filename', str(paths["seg_pattern"]),  # Segment pattern
+            '-hls_segment_type', 'mpegts',  # Segment type
+            str(paths["master"])  # Output playlist
+        ]
 
-        # HLS output tuning: TS segments for compatibility; rolling window; independent keyframes
-        # master_pl_name triggers master playlist generation in newer ffmpeg when used with var_stream_map
-        # See: https://ffmpeg.org/ffmpeg-formats.html#hls-2
-        output_kwargs = {
-            "f": "hls",
-            "hls_time": max(1, int(session.segment_duration)),
-            "hls_list_size": max(1, int(session.window_size)),
-            "hls_flags": "delete_segments+independent_segments+append_list+temp_file",
-            "hls_segment_filename": str(paths["seg_pattern"]),
-            "hls_playlist_type": "event",
-            "hls_allow_cache": 0,
-            "master_pl_name": "playlist.m3u8",
-            "hls_base_url": f"{self._public_urls(session.stream_id)['segments_base']}",
-        }
-
-        # Variants: ensure we have at least one
-        variants = session.variants or hls_config.variants
-        if not variants:
-            # Fallback single variant ~720p at 2000k bitrate
-            variants = [{"name": "v0", "width": 1280, "height": 720, "bitrate": "2000k"}]
-
-        # We will use filter_complex and var_stream_map to produce a master playlist with variants
-        # Build scale filters per variant and map them
-        in_stream = ffmpeg.input(session.camera_url, **input_kwargs)
-
-        # Build variant streams
-        streams = []
-        var_map_parts = []
-        for i, v in enumerate(variants):
-            scale = ffmpeg.filter(in_stream.video, "scale", v["width"], v["height"])
-            # You can tune encoders here (e.g., libx264 settings), but keep minimal for now
-            out = ffmpeg.output(
-                scale,
-                str(paths["master"]),  # ffmpeg will build variants into the master via var_stream_map
-                **{
-                    **output_kwargs,
-                    f"b:v:{i}": v["bitrate"],
-                    # We rely on var_stream_map instead of explicit -map; set below as global args
-                },
-            )
-            streams.append(out)
-            var_map_parts.append(f"v:{i},name:{v.get('name', f'v{i}')},bw={_bitrate_to_bw(v['bitrate'])}")
-
-        # Build the var_stream_map
-        var_stream_map = " ".join(var_map_parts)
-
-        # Assemble global args
-        graph = ffmpeg.merge_outputs(*streams).global_args(
-            "-loglevel", "warning",
-            "-preset", "veryfast",
-            "-g", str(int(2 * output_kwargs["hls_time"]) * 30),  # approximate GOP if 30fps
-            "-sc_threshold", "0",
-            "-var_stream_map", var_stream_map,
-        )
-
-        self.logger.info(f"Starting ffmpeg for stream={session.stream_id} -> {paths['master']}")
+        self.logger.info(f"Starting ffmpeg for stream={session.stream_id}")
+        self.logger.info(f"Command: {' '.join(cmd)}")
+        
         try:
-            process = graph.run_async(pipe_stdin=True, pipe_stdout=True, pipe_stderr=True)
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            # Wait a moment to see if ffmpeg starts successfully
+            await asyncio.sleep(0.5)
+            
+            if process.returncode is not None:
+                # Process already exited - read error
+                stderr = await process.stderr.read()
+                error_msg = stderr.decode('utf-8', errors='ignore')
+                self.logger.error(f"ffmpeg failed immediately: {error_msg}")
+                raise Exception(f"ffmpeg failed to start: {error_msg[:200]}")
+            
             session.active = True
+            
+            # Start a task to monitor ffmpeg output
+            asyncio.create_task(self._monitor_ffmpeg(session, process))
+            
+            self.logger.info(f"✅ ffmpeg started successfully for stream={session.stream_id}")
             return process
         except Exception as e:
-            msg = getattr(e, "stderr", None)
-            msg = msg.decode() if isinstance(msg, (bytes, bytearray)) else str(e)
-            self.logger.error(f"ffmpeg spawn failed for {session.stream_id}: {msg}")
+            self.logger.error(f"ffmpeg spawn failed for {session.stream_id}: {e}")
             raise
 
     async def start_stream(self, stream_id: str, camera_url: str) -> Dict[str, str]:
@@ -186,6 +163,23 @@ class HLSPackager:
         session.active = False
         return ok
 
+    async def _monitor_ffmpeg(self, session: StreamSession, process: asyncio.subprocess.Process):
+        """Monitor ffmpeg stderr output for errors and info."""
+        try:
+            while session.active and process.returncode is None:
+                line = await process.stderr.readline()
+                if not line:
+                    break
+                line_str = line.decode('utf-8', errors='ignore').strip()
+                if line_str:
+                    if 'error' in line_str.lower() or 'failed' in line_str.lower():
+                        self.logger.error(f"FFmpeg [{session.stream_id}]: {line_str}")
+                        session.error_count += 1
+                    else:
+                        self.logger.debug(f"FFmpeg [{session.stream_id}]: {line_str}")
+        except Exception as e:
+            self.logger.error(f"Error monitoring ffmpeg for {session.stream_id}: {e}")
+    
     async def _watch_segments(self, session: StreamSession):
         """Monitor segment directory to keep last_segment_time fresh and detect stalls."""
         paths = self._paths(session)

@@ -1,0 +1,178 @@
+# Hyperparameters Configuration for Model Training
+# =================================================
+
+# VMamba TMTB Fine-tuning Hyperparameters
+vmamba_tmtb:
+  # Optimizer
+  optimizer:
+    type: "AdamW"
+    lr: 1.0e-5
+    weight_decay: 1.0e-4
+    betas: [0.9, 0.999]
+    eps: 1.0e-8
+
+  # Learning rate scheduler
+  scheduler:
+    type: "ReduceLROnPlateau"
+    mode: "min"
+    factor: 0.5
+    patience: 5
+    min_lr: 1.0e-7
+
+  # Training parameters
+  epochs: 50
+  batch_size: 8
+  accumulation_steps: 1
+  grad_clip: 1.0
+
+  # Model specific
+  freeze_backbone: false
+  train_regression_head_only: true
+
+  # Loss function
+  loss:
+    type: "MSELoss"
+    weight: 1.0
+
+  # Validation
+  val_interval: 1
+  val_batch_size: 1
+  early_stopping:
+    enabled: true
+    patience: 10
+    min_delta: 0.001
+
+# CSRNet Training Hyperparameters
+csrnet:
+  # Optimizer
+  optimizer:
+    type: "SGD"
+    lr: 1.0e-6
+    momentum: 0.9
+    weight_decay: 5.0e-4
+
+  # Learning rate scheduler
+  scheduler:
+    type: "StepLR"
+    step_size: 20
+    gamma: 0.5
+
+  # Training parameters
+  epochs: 100
+  batch_size: 1
+  accumulation_steps: 1
+  grad_clip: null
+
+  # Model specific
+  freeze_frontend: false
+  backend: "vgg16"
+
+  # Loss function
+  loss:
+    type: "MSELoss"
+    weight: 1.0
+
+  # Validation
+  val_interval: 1
+  val_batch_size: 1
+  early_stopping:
+    enabled: true
+    patience: 15
+    min_delta: 0.001
+
+# MCNN Training Hyperparameters
+mcnn:
+  # Optimizer
+  optimizer:
+    type: "Adam"
+    lr: 1.0e-4
+    weight_decay: 1.0e-4
+
+  # Learning rate scheduler
+  scheduler:
+    type: "ExponentialLR"
+    gamma: 0.95
+
+  # Training parameters
+  epochs: 80
+  batch_size: 4
+  accumulation_steps: 2
+  grad_clip: null
+
+  # Loss function
+  loss:
+    type: "MSELoss"
+    weight: 1.0
+
+  # Validation
+  val_interval: 1
+  val_batch_size: 1
+  early_stopping:
+    enabled: true
+    patience: 12
+    min_delta: 0.001
+
+# Data Augmentation Hyperparameters
+augmentation:
+  train:
+    random_crop:
+      enabled: true
+      size: [512, 512]
+
+    horizontal_flip:
+      enabled: true
+      p: 0.5
+
+    vertical_flip:
+      enabled: false
+      p: 0.0
+
+    rotation:
+      enabled: false
+      degrees: [-10, 10]
+
+    color_jitter:
+      enabled: false
+      brightness: 0.2
+      contrast: 0.2
+      saturation: 0.2
+      hue: 0.1
+
+    gaussian_blur:
+      enabled: false
+      kernel_size: [3, 7]
+      sigma: [0.1, 2.0]
+
+  val:
+    resize:
+      size: [512, 512]
+
+# Density Map Generation Hyperparameters
+density_map:
+  gaussian_kernel:
+    sigma: 4.0
+    kernel_size: 15
+
+  downsample_factor: 8
+
+  adaptive_kernel:
+    enabled: true
+    k_nearest: 3
+    beta: 0.3
+
+# Evaluation Metrics Thresholds
+evaluation:
+  metrics:
+    - "MAE" # Mean Absolute Error
+    - "MSE" # Mean Squared Error
+    - "RMSE" # Root Mean Squared Error
+
+  # Model selection
+  primary_metric: "MAE"
+  mode: "min" # min or max
+
+  # Thresholds for acceptable performance
+  thresholds:
+    mae_excellent: 50.0
+    mae_good: 80.0
+    mae_acceptable: 120.0
