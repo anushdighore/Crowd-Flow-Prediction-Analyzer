@@ -1,0 +1,44 @@
+# config/config.yaml
+
+camera:
+  default_url: "http://192.168.1.6:8080/shot.jpg"
+  timeout: 5.0
+  verify_ssl: false
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+hls:
+  output_dir: "static/hls"
+  variants:
+    - width: 1280
+      height: 720
+      bitrate: "2000k"
+    - width: 854
+      height: 480
+      bitrate: "1000k"
+    - width: 640
+      height: 360
+      bitrate: "500k"
+  segment_duration: 4  # seconds
+  window_size: 6  # number of segments to keep
+  cleanup_interval: 60  # seconds
+  stream_timeout: 3600  # seconds
+
+ml:
+  default_model: "csrnet"
+  models:
+    csrnet:
+      enabled: true
+    tmtb:
+      enabled: true
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  reload: true
+  workers: 1
+  log_level: "info"
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://127.0.0.1:3000"
+    - "http://localhost:5173"
+    - "http://127.0.0.1:5173"

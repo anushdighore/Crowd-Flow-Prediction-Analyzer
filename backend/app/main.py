@@ -1,26 +1,37 @@
 """
 Crowd Counter Backend API
 
-Main FastAPI application for crowd counting models.
+Main FastAPI application for crowd counting models with HLS streaming support.
 """
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
+import asyncio
 import logging
-from PIL import Image
-import io
 import sys
 from pathlib import Path
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from PIL import Image
+import io
+
+# Import API routers
+from app.camera.camera import router as camera_router
+from app.api import camera as api_camera
+from app.camera.hls import router as hls_router
+from app.services.hls_packager import hls_packager
+from app.services.stream_manager import stream_manager
+from prometheus_fastapi_instrumentator import Instrumentator
 
 # Add ml/src to path
 ml_path = Path(__file__).parent.parent.parent / "ml" / "src"
 if str(ml_path) not in sys.path:
     sys.path.insert(0, str(ml_path))
 
-from models.csrnet import api as csrnet_api
-from models.tmtb import api as tmtb_api
-
-# Import API router
-from app.api import api_router
+try:
+    from models.csrnet import api as csrnet_api
+    from models.tmtb import api as tmtb_api
+except ImportError as e:
+    logger = logging.getLogger(__name__)
+    logger.warning(f"Could not import model APIs: {e}")
+    csrnet_api = tmtb_api = None
 
 # Configure logging
 logging.basicConfig(
@@ -32,26 +43,53 @@ logger = logging.getLogger(__name__)
 # Create FastAPI app
 app = FastAPI(
     title="Crowd Counter API",
-    description="Multi-model crowd counting API with CSRNet, VMamba, and more",
+    description="Multi-model crowd counting API with CSRNet, VMamba, and HLS streaming",
     version="1.0.0"
 )
 
-# Configure CORS
+# CORS configuration
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:5173",  # Vite dev server
-    ],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
-# Include API router
-app.include_router(api_router)
+# Include API routers
+app.include_router(camera_router, prefix="/api", tags=["camera"])
+app.include_router(hls_router, prefix="/api", tags=["hls"])
+app.include_router(api_camera.router, prefix="/api", tags=["camera"])
 
+# Add Prometheus metrics
+instrumentator = Instrumentator()
+instrumentator.instrument(app).expose(app)
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on startup"""
+    # Start background tasks
+    asyncio.create_task(cleanup_task())
+    asyncio.create_task(stream_manager.cleanup_inactive_streams())
+    logger.info("🚀 Application startup complete")
+
+async def cleanup_task():
+    """Background task to clean up old HLS segments"""
+    while True:
+        try:
+            hls_packager.cleanup_old_segments()
+            await asyncio.sleep(60)  # Run every minute
+        except Exception as e:
+            logger.error(f"Cleanup task error: {e}")
+            await asyncio.sleep(60)
 
 @app.get("/")
 async def root():
@@ -60,20 +98,19 @@ async def root():
         "message": "Crowd Counter API",
         "version": "1.0.0",
         "models": ["CSRNet", "TMTB (VMamba)"],
+        "features": ["REST API", "WebSocket", "HLS Streaming"],
         "docs": "/docs"
     }
-
 
 @app.get("/health")
 async def health():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "service": "Crowd Counter API"
+        "service": "Crowd Counter API",
+        "active_streams": len([s for s in hls_packager.sessions.values() if s.active])
     }
 
-
-# WebSocket endpoint for real-time counting
 @app.websocket("/ws/count")
 async def websocket_count(websocket: WebSocket):
     """WebSocket endpoint for real-time webcam counting"""
@@ -84,10 +121,7 @@ async def websocket_count(websocket: WebSocket):
     
     try:
         while True:
-            # Receive image data from frontend
             data = await websocket.receive_json()
-            
-            # Extract frame data (frontend sends "frame" key)
             frame_data = data.get("frame") or data.get("image")
             model_type = data.get("model", "csrnet")
             
@@ -98,7 +132,6 @@ async def websocket_count(websocket: WebSocket):
                 })
                 continue
             
-            # Decode base64 image
             import base64
             if frame_data.startswith("data:image"):
                 frame_data = frame_data.split(",")[1]
@@ -107,26 +140,30 @@ async def websocket_count(websocket: WebSocket):
             image = Image.open(io.BytesIO(image_bytes))
             
             # Run prediction based on selected model
-            if model_type.lower() == "tmtb":
-                # Use TMTB model (lazy-loaded) - config-driven sizing
-                result = tmtb_api.predict(image, source="webcam")
-                model_name = "TMTB"
-            else:
-                # Use CSRNet (default)
-                result = csrnet_api.predict(image, source="webcam")
-                model_name = "CSRNet"
-            
-            frame_number += 1
-            
-            # Send result (match frontend expected format)
-            await websocket.send_json({
-                "success": True,
-                "model": model_name.lower(),
-                "count": result["count"] if "count" in result else result.get("rounded_count", 0),
-                "inference_time_ms": result.get("inference_time_ms", 0),
-                "frame_number": frame_number,
-                "fps": 1000 / result["inference_time_ms"] if result.get("inference_time_ms", 0) > 0 else 0
-            })
+            try:
+                if model_type.lower() == "tmtb" and tmtb_api:
+                    result = tmtb_api.predict(image, source="webcam")
+                    model_name = "TMTB"
+                else:
+                    result = csrnet_api.predict(image, source="webcam") if csrnet_api else {"count": 0, "inference_time_ms": 0}
+                    model_name = "CSRNet"
+                
+                frame_number += 1
+                
+                await websocket.send_json({
+                    "success": True,
+                    "model": model_name.lower(),
+                    "count": result.get("count", result.get("rounded_count", 0)),
+                    "inference_time_ms": result.get("inference_time_ms", 0),
+                    "frame_number": frame_number,
+                    "fps": 1000 / result["inference_time_ms"] if result.get("inference_time_ms", 0) > 0 else 0
+                })
+            except Exception as e:
+                logger.error(f"Prediction error: {e}")
+                await websocket.send_json({
+                    "success": False,
+                    "error": f"Prediction failed: {str(e)}"
+                })
                 
     except WebSocketDisconnect:
         logger.info("❌ WebSocket disconnected")
@@ -139,7 +176,6 @@ async def websocket_count(websocket: WebSocket):
             })
         except:
             pass
-
 
 if __name__ == "__main__":
     import uvicorn

@@ -75,8 +75,6 @@ data/external/*
 !data/processed/.gitkeep
 !data/external/.gitkeep
 
-# Allow frontend models
-!frontend/src/models/
 
 # Datasets (large files)
 *.h5
@@ -160,15 +158,8 @@ wheels/
 .installed.cfg
 *.egg
 
-# Frontend (Node.js)
-crowd-counter-frontend/node_modules/
-crowd-counter-frontend/build/
-crowd-counter-frontend/dist/
-crowd-counter-frontend/.cache/
-crowd-counter-frontend/coverage/
-crowd-counter-frontend/npm-debug.log*
-crowd-counter-frontend/yarn-debug.log*
-crowd-counter-frontend/yarn-error.log*
+
+
 
 # Config overrides (local development)
 config/config.local.yaml
