@@ -6,10 +6,16 @@ streaming, connection testing, and frame processing.
 """
 
 import asyncio
+import io
 import logging
+import sys
 import time
+import os
+from pathlib import Path
 from typing import Optional
 import cv2
+import numpy as np
+from PIL import Image
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -21,6 +27,36 @@ from app.camera.config import camera_config
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Add ml/src to path for model imports
+
+# Get the absolute path to the ml/src directory
+current_dir = os.path.dirname(__file__)
+backend_dir = os.path.dirname(current_dir)
+project_root = os.path.dirname(backend_dir)
+ml_src_path = os.path.join(project_root, "ml", "src")
+
+if ml_src_path not in sys.path:
+    sys.path.insert(0, ml_src_path)
+    logger.info(f"Added ML path: {ml_src_path}")
+
+# Also add the models directory directly
+models_path = os.path.join(ml_src_path, "models")
+if models_path not in sys.path:
+    sys.path.insert(0, models_path)
+    logger.info(f"Added models path: {models_path}")
+
+logger.info(f"Current Python path includes: {[p for p in sys.path if 'ml' in p or 'models' in p]}")
+
+try:
+    logger.info("Importing model APIs...")
+    from models.csrnet import api as csrnet_api
+    logger.info("✓ Successfully imported CSRNet API")
+    from models.tmtb import api as tmtb_api
+    logger.info("✓ Successfully imported TMTB API")
+except ImportError as e:
+    logger.error(f"❌ Could not import model APIs: {e}", exc_info=True)
+    csrnet_api = tmtb_api = None
 
 # Create API router
 router = APIRouter(prefix="/camera", tags=["camera"])
@@ -98,32 +134,50 @@ async def process_frame(
     camera_url: str = Query(default=camera_config.default_url),
     model_name: str = "csrnet"
 ):
-    """Process a single frame from the camera."""
-    frame = await camera_client.get_frame(camera_url)
-    if frame is None:
-        raise HTTPException(status_code=400, detail="Could not get frame from camera")
-
-    start_time = time.time()
-    
+    """Process a single frame from the camera with ML prediction."""
     try:
-        if model_name.lower() == "csrnet" and csrnet_api:
-            result = csrnet_api.predict(frame, source="webcam")
-            count = result.get("count", -1)
-        elif model_name.lower() == "tmtb" and tmtb_api:
-            result = tmtb_api.predict(frame, source="webcam")
-            count = result.get("count", -1)
-        else:
-            raise ValueError(f"Unsupported or unavailable model: {model_name}")
+        # Get frame from camera
+        frame = await camera_client.get_frame(camera_url)
+        if frame is None:
+            raise HTTPException(status_code=400, detail="Could not get frame from camera")
 
-        return {
-            "status": "success",
-            "model": model_name,
-            "count": count,
-            "processing_time": round(time.time() - start_time, 3),
-            "image_size": f"{frame.shape[1]}x{frame.shape[0]}",
-        }
+        # Convert frame to PIL Image for model processing
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        pil_image = Image.fromarray(frame_rgb)
+        
+        # Run ML prediction
+        if model_name.lower() == "csrnet" and csrnet_api:
+            result = csrnet_api.predict(pil_image, source="surveillance")
+            return {
+                "status": "success",
+                "model": "csrnet",
+                "count": result.get("rounded_count", 0),
+                "raw_count": result.get("count", 0),
+                "inference_time_ms": result.get("inference_time_ms", 0),
+                "device": result.get("device", "unknown"),
+                "image_size": f"{frame.shape[1]}x{frame.shape[0]}",
+            }
+        elif model_name.lower() == "tmtb" and tmtb_api:
+            result = tmtb_api.predict(pil_image, source="surveillance")
+            return {
+                "status": "success",
+                "model": "tmtb",
+                "count": result.get("rounded_count", 0),
+                "raw_count": result.get("count", 0),
+                "inference_time_ms": result.get("inference_time_ms", 0),
+                "device": result.get("device", "unknown"),
+                "image_size": f"{frame.shape[1]}x{frame.shape[0]}",
+            }
+        else:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Model '{model_name}' is not available. CSRNet available: {csrnet_api is not None}, TMTB available: {tmtb_api is not None}"
+            )
+            
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error processing frame: {e}")
+        logger.error(f"Error processing frame: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/status")

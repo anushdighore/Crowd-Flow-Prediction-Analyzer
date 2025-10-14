@@ -12,6 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 import io
+import cv2
+import numpy as np
 
 # Import API routers
 from app.camera.camera import router as camera_router
@@ -19,6 +21,7 @@ from app.api import camera as api_camera
 from app.camera.hls import router as hls_router
 from app.services.hls_packager import hls_packager
 from app.services.stream_manager import stream_manager
+from app.api.v1.endpoints.csrnet import router as csrnet_router
 from prometheus_fastapi_instrumentator import Instrumentator
 
 # Add ml/src to path
@@ -71,6 +74,7 @@ app.add_middleware(
 app.include_router(camera_router, prefix="/api", tags=["camera"])
 app.include_router(hls_router, prefix="/api", tags=["hls"])
 app.include_router(api_camera.router, prefix="/api", tags=["camera"])
+app.include_router(csrnet_router, prefix="/api/v1", tags=["csrnet"])
 
 # Mount static files for HLS segments
 hls_static_dir = Path(__file__).parent.parent / "static" / "hls"
@@ -177,6 +181,104 @@ async def websocket_count(websocket: WebSocket):
         logger.info("❌ WebSocket disconnected")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
+        try:
+            await websocket.send_json({
+                "success": False,
+                "error": str(e)
+            })
+        except:
+            pass
+
+@app.websocket("/ws/external-camera")
+async def websocket_external_camera(websocket: WebSocket):
+    """WebSocket endpoint for external IP camera with real-time ML predictions"""
+    await websocket.accept()
+    logger.info("✅ WebSocket connected for external camera")
+    
+    from app.camera.camera import camera_client
+    
+    frame_number = 0
+    camera_url = None
+    model_type = "csrnet"
+    
+    try:
+        while True:
+            data = await websocket.receive_json()
+            
+            # Handle control messages
+            if "camera_url" in data:
+                camera_url = data["camera_url"]
+                model_type = data.get("model", "csrnet")
+                logger.info(f"📹 External camera URL set: {camera_url}, Model: {model_type}")
+                await websocket.send_json({
+                    "success": True,
+                    "message": "Camera URL configured",
+                    "camera_url": camera_url
+                })
+                continue
+            
+            # Request for next frame
+            if data.get("action") == "get_frame":
+                if not camera_url:
+                    await websocket.send_json({
+                        "success": False,
+                        "error": "Camera URL not set. Send camera_url first."
+                    })
+                    continue
+                
+                try:
+                    # Get frame from external camera
+                    frame = await camera_client.get_frame(camera_url)
+                    
+                    if frame is None:
+                        await websocket.send_json({
+                            "success": False,
+                            "error": "Failed to get frame from camera"
+                        })
+                        continue
+                    
+                    # Convert to PIL Image
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    pil_image = Image.fromarray(frame_rgb)
+                    
+                    # Run ML prediction
+                    if model_type.lower() == "tmtb" and tmtb_api:
+                        result = tmtb_api.predict(pil_image, source="surveillance")
+                        model_name = "TMTB"
+                    else:
+                        result = csrnet_api.predict(pil_image, source="surveillance") if csrnet_api else {"count": 0, "inference_time_ms": 0, "rounded_count": 0}
+                        model_name = "CSRNet"
+                    
+                    frame_number += 1
+                    
+                    # Encode frame as JPEG for sending back
+                    _, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+                    import base64
+                    frame_base64 = base64.b64encode(buffer).decode('utf-8')
+                    
+                    await websocket.send_json({
+                        "success": True,
+                        "model": model_name.lower(),
+                        "count": result.get("rounded_count", result.get("count", 0)),
+                        "raw_count": result.get("count", 0),
+                        "inference_time_ms": result.get("inference_time_ms", 0),
+                        "device": result.get("device", "unknown"),
+                        "frame_number": frame_number,
+                        "fps": 1000 / result["inference_time_ms"] if result.get("inference_time_ms", 0) > 0 else 0,
+                        "frame": f"data:image/jpeg;base64,{frame_base64}"
+                    })
+                    
+                except Exception as e:
+                    logger.error(f"Frame processing error: {e}", exc_info=True)
+                    await websocket.send_json({
+                        "success": False,
+                        "error": f"Frame processing failed: {str(e)}"
+                    })
+                
+    except WebSocketDisconnect:
+        logger.info("❌ External camera WebSocket disconnected")
+    except Exception as e:
+        logger.error(f"External camera WebSocket error: {e}", exc_info=True)
         try:
             await websocket.send_json({
                 "success": False,

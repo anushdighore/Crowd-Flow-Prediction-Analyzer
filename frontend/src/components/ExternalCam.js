@@ -1,38 +1,47 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import "./WebcamCounter.css";
 
 const API_BASE = "http://localhost:8000/api";
+const WS_BASE = "ws://localhost:8000";
 
 export default function ExternalCam() {
-  const [cameraUrl, setCameraUrl] = useState("http://192.168.1.6:8080/video");
+  const [cameraUrl, setCameraUrl] = useState("http://192.168.137.168:8080/video");
   const [isStreaming, setIsStreaming] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [count, setCount] = useState(null);
-  const [inferenceTime, setInferenceTime] = useState(null);
+  const [results, setResults] = useState(null);
+  const [fps, setFps] = useState(0);
+  const [frameCount, setFrameCount] = useState(0);
+  const [selectedModel, setSelectedModel] = useState("csrnet");
 
   const imgRef = useRef(null);
-  const processInterval = useRef(null);
+  const wsRef = useRef(null);
+  const intervalRef = useRef(null);
 
-  const stopStream = () => {
+  // Disconnect WebSocket
+  const disconnectWebSocket = useCallback(() => {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+
+  // Stop streaming
+  const stopStream = useCallback(() => {
     setIsStreaming(false);
-    setCount(null);
-    setInferenceTime(null);
-
-    if (imgRef.current) {
-      imgRef.current.onerror = null;
-      imgRef.current.onload = null;
-      imgRef.current.src = "";
-    }
-
-    if (processInterval.current) {
-      clearInterval(processInterval.current);
-      processInterval.current = null;
-    }
-  };
+    setResults(null);
+    setFps(0);
+    setFrameCount(0);
+    disconnectWebSocket();
+  }, [disconnectWebSocket]);
 
   useEffect(() => {
     return () => stopStream();
-  }, []);
+  }, [stopStream]);
 
   const testConnection = async () => {
     try {
@@ -51,75 +60,91 @@ export default function ExternalCam() {
     }
   };
 
-  const processFrame = async () => {
+  // Connect to WebSocket
+  const connectWebSocket = useCallback(() => {
     try {
-      const res = await fetch(
-        `${API_BASE}/camera/process?camera_url=${encodeURIComponent(cameraUrl)}`
-      );
-      const data = await res.json();
-      if (res.ok) {
-        setCount(data.count ?? null);
-        setInferenceTime(data.inference_time_ms ?? null);
-      }
+      const ws = new WebSocket(`${WS_BASE}/ws/external-camera`);
+
+      ws.onopen = () => {
+        console.log("✅ External camera WebSocket connected");
+        setError(null);
+        
+        // Send camera URL and model selection
+        ws.send(JSON.stringify({
+          camera_url: cameraUrl,
+          model: selectedModel
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.success) {
+          if (data.frame) {
+            // Update image with new frame
+            if (imgRef.current) {
+              imgRef.current.src = data.frame;
+            }
+          }
+          
+          // Update results
+          if (data.count !== undefined) {
+            setResults(data);
+            setFps(data.fps || 0);
+            setFrameCount(data.frame_number || 0);
+          }
+        } else {
+          console.error("Processing error:", data.error);
+          setError(data.error);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        setError("WebSocket connection error");
+      };
+
+      ws.onclose = () => {
+        console.log("❌ External camera WebSocket disconnected");
+        if (isStreaming) {
+          setError("Connection lost. Please restart.");
+        }
+      };
+
+      wsRef.current = ws;
     } catch (err) {
-      console.error('Frame processing error:', err);
+      setError(`Failed to connect to server: ${err.message}`);
     }
-  };
+  }, [cameraUrl, selectedModel, isStreaming]);
 
-  const startMjpegStream = () => {
-    if (!imgRef.current) {
-      console.error("Image ref not available");
-      setError("Image element not ready");
-      return;
+  // Request frames from backend
+  const requestFrame = useCallback(() => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ action: "get_frame" }));
     }
+  }, []);
 
-    const streamSrc = `${API_BASE}/camera/stream?camera_url=${encodeURIComponent(cameraUrl)}`;
-    
-    console.log("🎥 Starting MJPEG stream...");
-    console.log("   Stream URL:", streamSrc);
-    console.log("   Camera URL:", cameraUrl);
-    console.log("   Image element:", imgRef.current);
-
-    // Set up event handlers BEFORE setting src
-    imgRef.current.onload = () => {
-      console.log("✅ MJPEG stream loaded successfully!");
-      setError(null);
-      setIsStreaming(true);
-    };
-
-    imgRef.current.onerror = (e) => {
-      console.error("❌ MJPEG stream error:", e);
-      console.error("   Failed URL:", streamSrc);
-      setError("MJPEG stream failed to load. Check if backend is running and camera is accessible.");
-      setIsStreaming(false);
-    };
-
-    // Set the source to start streaming
-    imgRef.current.src = streamSrc;
-    console.log("   Image src set, waiting for load...");
-  };
-
-  const startStream = async () => {
+  // Start streaming
+  const startStream = useCallback(async () => {
     if (!cameraUrl) {
       setError("Please enter a valid camera URL");
       return;
     }
     
-    console.log("📹 Start Stream clicked");
+    console.log("📹 Starting external camera stream");
     console.log("   Camera URL:", cameraUrl);
+    console.log("   Model:", selectedModel);
     
     setLoading(true);
     setError(null);
     stopStream();
     
     try {
-      // Show the streaming section immediately
       setIsStreaming(true);
+      connectWebSocket();
       
-      // Small delay to ensure DOM is ready
-      setTimeout(() => {
-        startMjpegStream();
-      }, 100);
+      // Request frames at ~5 FPS (200ms interval)
+      intervalRef.current = setInterval(requestFrame, 200);
       
       setLoading(false);
     } catch (e) {
@@ -128,173 +153,129 @@ export default function ExternalCam() {
       stopStream();
       setLoading(false);
     }
-  };
+  }, [cameraUrl, selectedModel, stopStream, connectWebSocket, requestFrame]);
 
   return (
-    <>
-      <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "20px", fontFamily: "Arial, sans-serif" }}>
-        <h1 style={{ color: "#333", marginBottom: "20px" }}>External Camera - MJPEG Streaming</h1>
+    <div className="webcam-counter">
+      <div className="container">
+        <h1>🎥 External IP Camera with Crowd Counting</h1>
 
-        <div style={{ background: "#f5f5f5", padding: "20px", borderRadius: "8px", marginBottom: "20px" }}>
-          <div style={{ marginBottom: "15px" }}>
-            <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold", color: "#555" }}>
-              Camera URL:
-            </label>
+        <div className="controls-panel">
+          <div className="input-group">
+            <label>Camera URL:</label>
             <input
               type="text"
               value={cameraUrl}
               onChange={(e) => setCameraUrl(e.target.value)}
-              placeholder="http://192.168.1.6:8080/video"
+              placeholder="http://192.168.137.168:8080/video"
               disabled={isStreaming}
-              style={{
-                width: "100%",
-                padding: "10px",
-                border: "1px solid #ddd",
-                borderRadius: "4px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-                background: isStreaming ? "#e9ecef" : "white"
-              }}
+              className={isStreaming ? "disabled" : ""}
             />
           </div>
 
-          <div style={{ display: "flex", gap: "10px", marginBottom: "15px" }}>
+          <div className="input-group">
+            <label>Select Model:</label>
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              disabled={isStreaming}
+              className={isStreaming ? "disabled" : ""}
+            >
+              <option value="csrnet">CSRNet</option>
+              <option value="tmtb">TMTB (VMamba)</option>
+            </select>
+          </div>
+
+          <div className="button-group">
             <button
               onClick={testConnection}
               disabled={loading || isStreaming}
-              style={{
-                padding: "10px 20px",
-                border: "none",
-                borderRadius: "4px",
-                cursor: loading || isStreaming ? "not-allowed" : "pointer",
-                fontSize: "14px",
-                fontWeight: "500",
-                background: "#007bff",
-                color: "white",
-                opacity: loading || isStreaming ? 0.6 : 1
-              }}
+              className="btn btn-test"
             >
-              Test Camera
+              🔍 Test Camera
             </button>
             {!isStreaming ? (
               <button
                 onClick={startStream}
                 disabled={loading}
-                style={{
-                  padding: "10px 20px",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: loading ? "not-allowed" : "pointer",
-                  fontSize: "14px",
-                  fontWeight: "500",
-                  background: "#28a745",
-                  color: "white",
-                  opacity: loading ? 0.6 : 1
-                }}
+                className="btn btn-start"
               >
-                {loading ? "Starting..." : "Start Stream"}
+                {loading ? "⏳ Starting..." : "▶️ Start Stream"}
               </button>
             ) : (
-              <button
-                onClick={stopStream}
-                style={{
-                  padding: "10px 20px",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontSize: "14px",
-                  fontWeight: "500",
-                  background: "#dc3545",
-                  color: "white"
-                }}
-              >
-                Stop Stream
+              <button onClick={stopStream} className="btn btn-stop">
+                ⏹️ Stop Stream
               </button>
             )}
           </div>
 
           {error && (
-            <div style={{
-              color: "#721c24",
-              background: "#f8d7da",
-              padding: "12px",
-              borderRadius: "4px",
-              border: "1px solid #f5c6cb"
-            }}>
-              Error: {error}
+            <div className="error-message">
+              ⚠️ {error}
             </div>
           )}
         </div>
 
         {isStreaming && (
-          <div style={{
-            background: "white",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-            marginBottom: "20px"
-          }}>
-            <h2 style={{ marginTop: 0, color: "#333" }}>Live Stream</h2>
-            <div style={{ 
-              background: "#000", 
-              borderRadius: "8px", 
-              overflow: "hidden", 
-              marginBottom: "15px",
-              minHeight: "480px"
-            }}>
-              <img
-                ref={imgRef}
-                alt="Camera stream"
-                style={{
-                  width: "100%",
-                  height: "auto",
-                  maxHeight: "480px",
-                  objectFit: "contain",
-                  display: "block"
-                }}
-              />
+          <div className="video-section">
+            <div className="video-container">
+              <img ref={imgRef} alt="External camera stream" className="video-feed" />
+              {results && (
+                <div className="overlay">
+                  <div className="count-display">
+                    👥 Count: <span className="count-number">{results.count}</span>
+                  </div>
+                </div>
+              )}
             </div>
-            <div style={{
-              background: "#f8f9fa",
-              padding: "15px",
-              borderRadius: "4px",
-              borderLeft: "4px solid #28a745"
-            }}>
-              <p style={{ margin: "8px 0", color: "#555" }}>
-                <strong>✅ Stream Status:</strong> <span style={{ color: "#28a745", fontWeight: "bold" }}>Active</span>
-              </p>
-              <p style={{ margin: "8px 0", color: "#555" }}>
-                <strong>Stream Type:</strong> MJPEG (Direct Feed)
-              </p>
-              <p style={{ margin: "8px 0", color: "#555" }}>
-                <strong>Camera URL:</strong> <code style={{ background: "#e9ecef", padding: "2px 6px", borderRadius: "3px", fontSize: "13px" }}>{cameraUrl}</code>
-              </p>
-            </div>
+
+            {results && (
+              <div className="stats-panel">
+                <div className="stat-item">
+                  <span className="stat-label">People Count:</span>
+                  <span className="stat-value">{results.count}</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">Model:</span>
+                  <span className="stat-value">{results.model?.toUpperCase()}</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">Inference Time:</span>
+                  <span className="stat-value">{results.inference_time_ms?.toFixed(1)} ms</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">FPS:</span>
+                  <span className="stat-value">{fps.toFixed(1)}</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">Frames Processed:</span>
+                  <span className="stat-value">{frameCount}</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">Device:</span>
+                  <span className="stat-value">{results.device}</span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        <div style={{
-          background: "#fff3cd",
-          padding: "20px",
-          borderRadius: "8px",
-          borderLeft: "4px solid #ffc107"
-        }}>
-          <h3 style={{ marginTop: 0, color: "#856404" }}>Instructions:</h3>
-          <ol style={{ margin: "10px 0", paddingLeft: "25px", color: "#856404" }}>
-            <li style={{ margin: "8px 0" }}>Enter your IP camera URL (e.g., http://192.168.1.6:8080/video)</li>
-            <li style={{ margin: "8px 0" }}>Click "Test Camera" to verify connection</li>
-            <li style={{ margin: "8px 0" }}>Click "Start Stream" to begin streaming</li>
-            <li style={{ margin: "8px 0" }}>The stream will display with real-time crowd counting</li>
-            <li style={{ margin: "8px 0" }}>Use "Stop Stream" to end the streaming session</li>
+        <div className="info-panel">
+          <h3>📋 Instructions</h3>
+          <ol>
+            <li>Enter your IP camera URL (e.g., http://192.168.137.168:8080/video)</li>
+            <li>Select the ML model (CSRNet or TMTB)</li>
+            <li>Click "Test Camera" to verify connection</li>
+            <li>Click "Start Stream" to begin real-time crowd counting</li>
+            <li>View live predictions overlaid on the video stream</li>
           </ol>
-          <h4 style={{ color: "#856404" }}>Common Camera URLs:</h4>
-          <ul style={{ margin: "10px 0", paddingLeft: "25px", color: "#856404" }}>
-            <li style={{ margin: "8px 0" }}><strong>IP Webcam:</strong> http://192.168.1.6:8080/video</li>
-            <li style={{ margin: "8px 0" }}><strong>DroidCam:</strong> http://192.168.1.6:4747/video</li>
-            <li style={{ margin: "8px 0" }}><strong>Snapshot:</strong> http://192.168.1.6:8080/shot.jpg</li>
+          <h4>📱 Common Camera Apps:</h4>
+          <ul>
+            <li><strong>IP Webcam:</strong> http://YOUR_IP:8080/video</li>
+            <li><strong>DroidCam:</strong> http://YOUR_IP:4747/video</li>
           </ul>
         </div>
       </div>
-    </>
+    </div>
   );
 }

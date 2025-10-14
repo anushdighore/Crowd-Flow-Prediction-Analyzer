@@ -17,10 +17,18 @@ from .camera_client import camera_client
 # Configure logging
 logger = logging.getLogger(__name__)
 
+import sys
+from pathlib import Path
+
+# Add ml/src to path
+ml_path = Path(__file__).parent.parent.parent.parent / "ml" / "src"
+if str(ml_path) not in sys.path:
+    sys.path.insert(0, str(ml_path))
+
 # Import ML processor
 try:
     from app.services.ml_processor import ml_processor
-    from app.services.csrnet import csrnet_api
+    from models.csrnet import api as csrnet_api
     from app.services.tmtb import tmtb_api
 except ImportError as e:
     logger.warning(f"Could not import model APIs: {e}")
