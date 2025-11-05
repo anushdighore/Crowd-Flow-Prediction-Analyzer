@@ -22,7 +22,15 @@ from app.camera.hls import router as hls_router
 from app.services.hls_packager import hls_packager
 from app.services.stream_manager import stream_manager
 from app.api.v1.endpoints.csrnet import router as csrnet_router
+from app.api.v1.endpoints.tmtb import router as tmtb_router
 from prometheus_fastapi_instrumentator import Instrumentator
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Add ml/src to path
 ml_path = Path(__file__).parent.parent.parent / "ml" / "src"
@@ -32,17 +40,13 @@ if str(ml_path) not in sys.path:
 try:
     from models.csrnet import api as csrnet_api
     from models.tmtb import api as tmtb_api
+    from app.services.gated_model_router import get_router
+    model_router = get_router()
+    logger.info(f"✅ Available models: {model_router.get_available_models()}")
 except ImportError as e:
-    logger = logging.getLogger(__name__)
     logger.warning(f"Could not import model APIs: {e}")
     csrnet_api = tmtb_api = None
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+    model_router = None
 
 # Create FastAPI app
 app = FastAPI(
@@ -75,6 +79,7 @@ app.include_router(camera_router, prefix="/api", tags=["camera"])
 app.include_router(hls_router, prefix="/api", tags=["hls"])
 app.include_router(api_camera.router, prefix="/api", tags=["camera"])
 app.include_router(csrnet_router, prefix="/api/v1", tags=["csrnet"])
+app.include_router(tmtb_router, prefix="/api/v1", tags=["tmtb"])
 
 # Mount static files for HLS segments
 hls_static_dir = Path(__file__).parent.parent / "static" / "hls"
@@ -241,22 +246,49 @@ async def websocket_external_camera(websocket: WebSocket):
                     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     pil_image = Image.fromarray(frame_rgb)
                     
-                    # Run ML prediction
-                    if model_type.lower() == "tmtb" and tmtb_api:
-                        result = tmtb_api.predict(pil_image, source="surveillance")
-                        model_name = "TMTB"
+                    # Run ML prediction using Gated Router
+                    if model_router:
+                        # Use gated architecture for model selection
+                        result = model_router.predict(
+                            pil_image,
+                            model_type=model_type,
+                            source="surveillance",
+                            return_density_map=True,
+                            return_boxes=(model_type.lower() == 'yolo')
+                        )
+                        model_name = result.get('model_name', model_type.upper())
+                        
+                        # Generate heatmap using router
+                        heatmap_frame = model_router.generate_heatmap(
+                            model_type,
+                            result,
+                            pil_image
+                        )
                     else:
-                        result = csrnet_api.predict(pil_image, source="surveillance") if csrnet_api else {"count": 0, "inference_time_ms": 0, "rounded_count": 0}
-                        model_name = "CSRNet"
+                        # Fallback to legacy mode
+                        if model_type.lower() == "tmtb" and tmtb_api:
+                            result = tmtb_api.predict(pil_image, source="surveillance", return_density_map=True)
+                            model_name = "TMTB"
+                            heatmap_frame = None
+                        else:
+                            result = csrnet_api.predict(pil_image, source="surveillance", return_density_map=True) if csrnet_api else {"count": 0, "inference_time_ms": 0, "rounded_count": 0}
+                            model_name = "CSRNet"
+                            heatmap_frame = None
                     
                     frame_number += 1
                     
-                    # Encode frame as JPEG for sending back
+                    # Encode original frame as JPEG
                     _, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
                     import base64
                     frame_base64 = base64.b64encode(buffer).decode('utf-8')
                     
-                    await websocket.send_json({
+                    # Encode heatmap frame if available
+                    heatmap_base64 = None
+                    if heatmap_frame is not None:
+                        _, heatmap_buffer = cv2.imencode('.jpg', heatmap_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+                        heatmap_base64 = base64.b64encode(heatmap_buffer).decode('utf-8')
+                    
+                    response_data = {
                         "success": True,
                         "model": model_name.lower(),
                         "count": result.get("rounded_count", result.get("count", 0)),
@@ -266,7 +298,13 @@ async def websocket_external_camera(websocket: WebSocket):
                         "frame_number": frame_number,
                         "fps": 1000 / result["inference_time_ms"] if result.get("inference_time_ms", 0) > 0 else 0,
                         "frame": f"data:image/jpeg;base64,{frame_base64}"
-                    })
+                    }
+                    
+                    # Add heatmap if available
+                    if heatmap_base64:
+                        response_data["heatmap"] = f"data:image/jpeg;base64,{heatmap_base64}"
+                    
+                    await websocket.send_json(response_data)
                     
                 except Exception as e:
                     logger.error(f"Frame processing error: {e}", exc_info=True)

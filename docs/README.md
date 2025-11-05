@@ -1,115 +1,86 @@
-# Documentation Organization
+# Project Documentation
 
-This directory contains all project documentation, organized into the following categories:
+Welcome to the Multi-Model Crowd Counting System documentation. This is a comprehensive system that combines **CSRNet** and **VMamba-TMTB** models for accurate crowd density prediction.
 
-## 📁 Directory Structure
+## 📚 Quick Navigation
 
-### `project_overview/`
+- **[Quick Start](QUICK_START.md)** - Get up and running in 5 minutes
+- **[Architecture](ARCHITECTURE.md)** - System design and model details
+- **[API Reference](API.md)** - REST and WebSocket endpoints
+- **[Deployment](DEPLOYMENT.md)** - Production setup guide
+- **[Guides](guides/)** - In-depth tutorials and troubleshooting
 
-Main project documentation and overview files
+## 🚀 What's Inside?
 
-- `README.md` - Main project README
-- `PROJECT_SUMMARY.md` - Project summary
-- `PROJECT_STRUCTURE.md` - Project structure
-- `1-project-Structure.md` - Detailed project structure
-- `QUICK_REFERENCE.md` - Quick reference guide
-- `GET_STARTED.md` - Getting started guide
+### Multi-Model Inference System
 
-### `models/`
+- **CSRNet**: Regression-based crowd counting with high accuracy
+- **VMamba-TMTB**: State-of-the-art visual state space model
+- **Ensemble Predictions**: Combined output for robust results
+- **GPU Acceleration**: CUDA-enabled inference (RTX 3050 6GB)
 
-Model-specific documentation and architecture details
+### Features
 
-- `CSRNET_ARCHITECTURE_PLAN.md` - CSRNet architecture planning
-- `CSRNET_INTEGRATION.md` - CSRNet integration guide
-- `README_VMAMBA_FINETUNING.md` - VMamba fine-tuning guide
-- `VMAMBA_FINETUNING_SUMMARY.md` - VMamba fine-tuning summary
-- `TMTB_BACKEND_INTEGRATION.md` - TMTB backend integration
-- `WHY_FINETUNE_VMAMBA.md` - Why fine-tune VMamba
-- `ALTERNATIVE_MODELS.md` - Alternative model options
-- `MODEL_COMPARISON.md` - Model comparison analysis
+- FastAPI REST API (Port 8000)
+- WebSocket real-time streaming support
+- IP camera support (HTTPS with mobile cameras)
+- HLS video streaming pipeline
+- TensorBoard training visualization
 
-### `setup/`
+### Tech Stack
 
-Installation and setup guides
+- **PyTorch**: 2.5.1+cu121 (GPU)
+- **FastAPI**: Backend framework
+- **React**: Frontend interface
+- **OpenCV**: Computer vision processing
+- **NumPy**: Numerical computing
 
-- `INSTALLATION_PRIORITY.md` - Installation priorities
-- `KAGGLE_SETUP.md` - Kaggle setup guide
-- `QUICKSTART.md` - General quickstart guide
-- `QUICKSTART_MULTIMODEL.md` - Multi-model quickstart
-- `QUICKSTART_VMAMBA.md` - VMamba quickstart
+## 📋 System Requirements
 
-### `development/`
+- Python 3.8+
+- NVIDIA GPU (CUDA 12.1+) recommended
+- 6GB VRAM minimum for inference
+- 8GB+ for training
 
-Development progress and tracking
+## 🔗 Important Directories
 
-- `PROGRESS_SUMMARY.md` - Development progress summary
-- `CHECKLIST_VMAMBA.md` - VMamba development checklist
-- `CLEANUP_SUMMARY.md` - Code cleanup summary
-- `RESTRUCTURING_COMPLETE.md` - Project restructuring completion
+| Directory       | Purpose                               |
+| --------------- | ------------------------------------- |
+| `backend/`      | FastAPI server, API endpoints, models |
+| `frontend/`     | React UI application                  |
+| `ml/`           | Model training and utilities          |
+| `tests/`        | Test suites and notebooks             |
+| `docs/archive/` | Legacy documentation (for reference)  |
 
-### `technical/`
+## 📖 Documentation Archive
 
-Technical issues, fixes, and solutions
+Old documentation has been archived in `docs/archive/` for reference:
 
-- `CUDA_EXTENSION_ISSUE.md` - CUDA extension issues
-- `FRONTEND_FIX.md` - Frontend fixes
-- `PREPROCESSING_FIX.md` - Preprocessing fixes
-- `QUICK_FIX.md` - Quick fixes
-- `TEMPORARY_VGG16_SOLUTION.md` - Temporary VGG16 solution
-- `WEIGHT_LOADING_ANALYSIS.md` - Weight loading analysis
+- Setup guides (legacy)
+- Development progress
+- Training documentation
+- Model analysis
+- Technical deep-dives
 
-### `data_management/`
+## ⚡ Getting Started
 
-Data and model management documentation
+**For Users:**
 
-- `DATASET_PREPARATION.md` - Dataset preparation guide
-- `MODEL_STORAGE.md` - Model storage guide
-- `CHECKPOINT_ALTERNATIVES.md` - Checkpoint alternatives
-- `CHECKPOINT_PROBLEM_SOLVED.md` - Checkpoint problem solutions
+1. Read [Quick Start](QUICK_START.md)
+2. Review [API Reference](API.md)
+3. Check [Deployment](DEPLOYMENT.md)
 
-### `features/`
+**For Developers:**
 
-Feature documentation and integration guides
+1. Read [Architecture](ARCHITECTURE.md)
+2. Review [guides/testing.md](guides/testing.md)
+3. Check [guides/training.md](guides/training.md)
 
-- `MULTIMODEL_SETUP.md` - Multi-model setup
-- `MULTIMODEL_SUMMARY.md` - Multi-model summary
-- `WEBCAM_README.md` - Webcam integration guide
-- `SYSTEM_DIAGRAMS.md` - System architecture diagrams
+## 🆘 Need Help?
 
-### `migration/`
+Check out the [troubleshooting guide](guides/troubleshooting.md) for common issues and solutions.
 
-Migration guides and update documentation
+---
 
-- `MIGRATION_GUIDE.md` - General migration guide
-- `PREPROCESSING_COMPLETE.md` - Preprocessing completion
-- `TEST_FINETUNED_MODEL.md` - Fine-tuned model testing
-
-### `other/`
-
-Miscellaneous documentation and resources
-
-- `Cloud.md` - Cloud deployment guide
-- `conda_basics_tutorial.html` - Conda basics tutorial
-- `conda_git_tutorial.md` - Conda and Git tutorial
-- `PROJECT_TREE.txt` - Project file tree
-
-### `api/`
-
-API documentation (separate directory)
-
-## 📋 Usage
-
-Navigate to the appropriate category directory to find documentation relevant to your needs:
-
-- **New users**: Start with `project_overview/` and `setup/`
-- **Developers**: Check `development/`, `technical/`, and `models/`
-- **Data scientists**: Look in `data_management/` and `models/`
-- **DevOps**: Refer to `migration/` and `other/`
-
-## 🔄 Maintenance
-
-When adding new documentation:
-
-1. Determine the most appropriate category
-2. Place the file in the corresponding subdirectory
-3. Update this README if adding a new category
+**Last Updated**: 2024
+**Status**: Production Ready

@@ -29,7 +29,7 @@ if str(ml_path) not in sys.path:
 try:
     from app.services.ml_processor import ml_processor
     from models.csrnet import api as csrnet_api
-    from app.services.tmtb import tmtb_api
+    from models.tmtb import api as tmtb_api
 except ImportError as e:
     logger.warning(f"Could not import model APIs: {e}")
     csrnet_api = tmtb_api = None

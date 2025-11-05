@@ -5,6 +5,8 @@ from pathlib import Path
 from PIL import Image
 from typing import Dict, Union
 import logging
+import numpy as np
+import cv2
 
 from .csrnet import load_csrnet
 
@@ -49,7 +51,39 @@ def get_model(checkpoint_path: str = None):
     return model
 
 
-def predict(image: Union[str, Path, Image.Image], checkpoint_path: str = None, source: str = "image") -> Dict:
+def generate_heatmap(density_map: torch.Tensor, original_image: Image.Image) -> np.ndarray:
+    """Generate heatmap overlay from density map
+    
+    Args:
+        density_map: Model output density map tensor
+        original_image: Original PIL image
+        
+    Returns:
+        BGR image with heatmap overlay (ready for cv2.imencode)
+    """
+    # Convert density map to numpy
+    density_np = density_map.squeeze().cpu().numpy()
+    
+    # Normalize to 0-255
+    density_normalized = density_np / (density_np.max() + 1e-8)
+    density_normalized = (density_normalized * 255).astype(np.uint8)
+    
+    # Resize to match original image size
+    density_resized = cv2.resize(density_normalized, original_image.size, interpolation=cv2.INTER_CUBIC)
+    
+    # Apply colormap (COLORMAP_JET gives red for high density, blue for low)
+    heatmap = cv2.applyColorMap(density_resized, cv2.COLORMAP_JET)
+    
+    # Convert original image to BGR numpy array
+    original_bgr = cv2.cvtColor(np.array(original_image), cv2.COLOR_RGB2BGR)
+    
+    # Blend heatmap with original image (60% heatmap, 40% original)
+    overlay = cv2.addWeighted(original_bgr, 0.4, heatmap, 0.6, 0)
+    
+    return overlay
+
+
+def predict(image: Union[str, Path, Image.Image], checkpoint_path: str = None, source: str = "image", return_density_map: bool = False) -> Dict:
     """Run CSRNet prediction with config-driven resizing
     
     Args:
@@ -57,6 +91,7 @@ def predict(image: Union[str, Path, Image.Image], checkpoint_path: str = None, s
         checkpoint_path: Path to model checkpoint
         source: Input source type - 'image'/'upload', 'webcam', 'video', 'surveillance'
                 Determines resize dimensions from config file
+        return_density_map: If True, include density map tensor in response
     """
     start_time = time.time()
     
@@ -107,7 +142,7 @@ def predict(image: Union[str, Path, Image.Image], checkpoint_path: str = None, s
     
     inference_time = (time.time() - start_time) * 1000
     
-    return {
+    result = {
         "count": float(count),
         "rounded_count": int(round(count)),
         "inference_time_ms": float(inference_time),
@@ -118,3 +153,9 @@ def predict(image: Union[str, Path, Image.Image], checkpoint_path: str = None, s
         "source": source,
         "config_dimensions": {"length": dims.length, "breadth": dims.breadth}
     }
+    
+    # Optionally include density map for heatmap generation
+    if return_density_map:
+        result["density_map"] = density_map
+    
+    return result
