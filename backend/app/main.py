@@ -23,6 +23,7 @@ from app.services.hls_packager import hls_packager
 from app.services.stream_manager import stream_manager
 from app.api.v1.endpoints.csrnet import router as csrnet_router
 from app.api.v1.endpoints.tmtb import router as tmtb_router
+from app.api.v1.endpoints.yolo import router as yolo_router
 from prometheus_fastapi_instrumentator import Instrumentator
 
 # Configure logging
@@ -80,6 +81,7 @@ app.include_router(hls_router, prefix="/api", tags=["hls"])
 app.include_router(api_camera.router, prefix="/api", tags=["camera"])
 app.include_router(csrnet_router, prefix="/api/v1", tags=["csrnet"])
 app.include_router(tmtb_router, prefix="/api/v1", tags=["tmtb"])
+app.include_router(yolo_router, prefix="/api/v1", tags=["yolo"])
 
 # Mount static files for HLS segments
 hls_static_dir = Path(__file__).parent.parent / "static" / "hls"

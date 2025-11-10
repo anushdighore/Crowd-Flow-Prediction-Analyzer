@@ -1,4 +1,5 @@
 # Executive Summary
+
 ## Multi-Model Crowd Counting System
 
 **Created**: November 2024  
@@ -14,6 +15,7 @@ The **Crowd Flow Prediction Analyzer** is an AI-powered crowd counting and densi
 ### 🎯 Problem We Solve
 
 Organizations need accurate, real-time crowd counting for:
+
 - Event venue safety management
 - Retail foot traffic analytics
 - Public safety and emergency response
@@ -23,20 +25,21 @@ Organizations need accurate, real-time crowd counting for:
 ### 🚀 Our Solution
 
 A **dual-model ensemble system** combining:
+
 - **CSRNet**: Regression-based model for dense crowds (75ms latency)
 - **VMamba-TMTB**: State-space model for generalization (40ms latency)
 - **Ensemble Voting**: Combined predictions for robustness
 
 ### 📊 Key Metrics
 
-| Metric | Value |
-|--------|-------|
-| **Accuracy (MAE)** | 7.6 people |
-| **Processing Speed** | 6-8 FPS (GPU) |
-| **Latency** | 100-150ms (ensemble) |
-| **GPU Memory** | 4-6GB |
-| **Concurrent Users** | 10-20 |
-| **Uptime SLA** | 99.5% |
+| Metric               | Value                |
+| -------------------- | -------------------- |
+| **Accuracy (MAE)**   | 7.6 people           |
+| **Processing Speed** | 6-8 FPS (GPU)        |
+| **Latency**          | 100-150ms (ensemble) |
+| **GPU Memory**       | 4-6GB                |
+| **Concurrent Users** | 10-20                |
+| **Uptime SLA**       | 99.5%                |
 
 ### 🏗️ Architecture
 
@@ -60,29 +63,34 @@ CSRNet      VMamba
 ### 💡 Key Features
 
 ✅ **Multi-Model Inference**
+
 - Dual model predictions
 - Confidence scoring
 - Graceful fallback
 
 ✅ **Multiple Input Sources**
+
 - Image uploads
 - IP cameras (HTTPS)
 - Webcam streams
 - Video files
 
 ✅ **Rich APIs**
+
 - REST endpoints (20+ documented)
 - WebSocket for real-time updates
 - Webhook notifications
 - Prometheus metrics
 
 ✅ **Production-Ready**
+
 - Security hardened
 - Error handling & retry logic
 - Performance optimized
 - Comprehensive logging
 
 ✅ **Easy Integration**
+
 - SDKs for Python/JavaScript
 - Docker containers
 - Kubernetes support
@@ -90,43 +98,48 @@ CSRNet      VMamba
 
 ### 📈 Tech Stack
 
-| Component | Technology |
-|-----------|-----------|
-| **Framework** | FastAPI + Uvicorn |
+| Component         | Technology                |
+| ----------------- | ------------------------- |
+| **Framework**     | FastAPI + Uvicorn         |
 | **Deep Learning** | PyTorch 2.5.1 (CUDA 12.1) |
-| **Frontend** | React 18.x |
-| **Database** | PostgreSQL (optional) |
-| **Cache** | Redis (optional) |
-| **Container** | Docker |
-| **Orchestration** | Kubernetes |
+| **Frontend**      | React 18.x                |
+| **Database**      | PostgreSQL (optional)     |
+| **Cache**         | Redis (optional)          |
+| **Container**     | Docker                    |
+| **Orchestration** | Kubernetes                |
 
 ### 🎓 Use Cases
 
 **1. Event Venues**
+
 - Real-time crowd monitoring
 - Occupancy alerts
 - Fire safety compliance
 - Emergency response
 
 **2. Retail & Shopping**
+
 - Foot traffic analytics
 - Peak hour detection
 - Staff optimization
 - Customer behavior insights
 
 **3. Public Safety**
+
 - Gathering monitoring
 - Crowd surge detection
 - Emergency coordination
 - Police/fire dispatch
 
 **4. Smart Cities**
+
 - Transit station monitoring
 - Public square analytics
 - Tourism statistics
 - Urban planning data
 
 **5. Research**
+
 - Benchmark dataset evaluation
 - Model comparison
 - Algorithm research
@@ -141,11 +154,11 @@ CSRNet      VMamba
 
 ### 📊 Performance Comparison
 
-| Model | Latency | Accuracy | Use Case |
-|-------|---------|----------|----------|
-| **CSRNet** | 75ms | High | Dense crowds |
-| **VMamba** | 40ms | Very High | General scenes |
-| **Ensemble** | 150ms | Best | Production |
+| Model        | Latency | Accuracy  | Use Case       |
+| ------------ | ------- | --------- | -------------- |
+| **CSRNet**   | 75ms    | High      | Dense crowds   |
+| **VMamba**   | 40ms    | Very High | General scenes |
+| **Ensemble** | 150ms   | Best      | Production     |
 
 ### 🔒 Security Features
 
@@ -158,22 +171,24 @@ CSRNet      VMamba
 
 ### 📦 Deployment Options
 
-| Option | Best For |
-|--------|----------|
-| **Local Development** | Testing, prototyping |
-| **Docker** | Single machine production |
-| **Docker Compose** | Multi-container local setup |
-| **Kubernetes** | Enterprise, high-scale |
-| **Cloud (AWS/GCP/Azure)** | Managed infrastructure |
+| Option                    | Best For                    |
+| ------------------------- | --------------------------- |
+| **Local Development**     | Testing, prototyping        |
+| **Docker**                | Single machine production   |
+| **Docker Compose**        | Multi-container local setup |
+| **Kubernetes**            | Enterprise, high-scale      |
+| **Cloud (AWS/GCP/Azure)** | Managed infrastructure      |
 
 ### 📈 Success Metrics
 
 **Technical:**
+
 - Response time p95 < 400ms
 - System availability > 99.5%
 - Error rate < 0.5%
 
 **Business:**
+
 - User adoption rate
 - Integration count
 - API call volume
@@ -185,7 +200,7 @@ CSRNet      VMamba
 **Phase 2 (Completed):** Training pipeline & optimization  
 **Phase 3 (In Progress):** Security & production deployment  
 **Phase 4 (Q1 2025):** Multi-GPU & Kubernetes support  
-**Phase 5 (Q2 2025):** Advanced analytics & dashboard  
+**Phase 5 (Q2 2025):** Advanced analytics & dashboard
 
 ### ⚡ Getting Started
 

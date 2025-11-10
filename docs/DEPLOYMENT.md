@@ -20,11 +20,13 @@ Runs on `http://localhost:8000`
 **Use case**: Consistent environment, easy scaling, cloud deployment
 
 **Build Image:**
+
 ```bash
 docker build -t crowd-counting:latest .
 ```
 
 **Run Container:**
+
 ```bash
 docker run -d \
   --gpus all \
@@ -36,8 +38,9 @@ docker run -d \
 ```
 
 **Docker Compose:**
+
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   backend:
@@ -67,6 +70,7 @@ services:
 #### AWS (EC2 + ECS)
 
 **EC2 Instance Setup:**
+
 ```bash
 # Use GPU-enabled instance (p3, g4dn family)
 # Deep Learning AMI with NVIDIA CUDA pre-installed
@@ -86,6 +90,7 @@ python backend/run.py
 ```
 
 **ECS Deployment:**
+
 ```bash
 # Create ECR repository
 aws ecr create-repository --repository-name crowd-counting
@@ -133,6 +138,7 @@ az container create \
 ### 4. Kubernetes Deployment
 
 **Helm Chart:**
+
 ```bash
 cd helm
 helm install crowd-counting ./crowd-counting \
@@ -143,6 +149,7 @@ helm install crowd-counting ./crowd-counting \
 ```
 
 **Kubernetes Manifest:**
+
 ```yaml
 apiVersion: v1
 kind: Service
@@ -171,26 +178,26 @@ spec:
         app: crowd-api
     spec:
       containers:
-      - name: crowd-api
-        image: crowd-counting:latest
-        ports:
-        - containerPort: 8000
-        resources:
-          requests:
-            nvidia.com/gpu: 1
-            memory: "8Gi"
-            cpu: "4"
-          limits:
-            nvidia.com/gpu: 1
-            memory: "16Gi"
-            cpu: "8"
-        volumeMounts:
-        - name: models
-          mountPath: /app/models
+        - name: crowd-api
+          image: crowd-counting:latest
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              nvidia.com/gpu: 1
+              memory: "8Gi"
+              cpu: "4"
+            limits:
+              nvidia.com/gpu: 1
+              memory: "16Gi"
+              cpu: "8"
+          volumeMounts:
+            - name: models
+              mountPath: /app/models
       volumes:
-      - name: models
-        persistentVolumeClaim:
-          claimName: models-pvc
+        - name: models
+          persistentVolumeClaim:
+            claimName: models-pvc
 ```
 
 ## Production Configuration
@@ -201,15 +208,15 @@ spec:
 app:
   name: "Crowd Counting API"
   version: "1.0.0"
-  debug: false  # Disable debug mode in production
+  debug: false # Disable debug mode in production
   log_level: "INFO"
-  
+
 server:
   host: "0.0.0.0"
   port: 8000
   workers: 4
   reload: false
-  
+
 models:
   csrnet:
     enabled: true
@@ -219,20 +226,20 @@ models:
     enabled: true
     weights: "/models/tmtb_final.pth"
     device: "cuda:0"
-    
+
 inference:
   batch_size: 1
   max_workers: 4
   gpu_memory_fraction: 0.8
   timeout_seconds: 30
-  
+
 api:
   cors_origins: ["https://yourdomain.com"]
-  rate_limit: 100  # requests per minute
+  rate_limit: 100 # requests per minute
   max_file_size_mb: 50
-  
+
 security:
-  api_key_required: true  # Enable API key validation
+  api_key_required: true # Enable API key validation
   ssl_enabled: true
   ssl_cert: "/etc/ssl/certs/server.crt"
   ssl_key: "/etc/ssl/private/server.key"
@@ -241,6 +248,7 @@ security:
 ### Security Setup
 
 **Enable HTTPS:**
+
 ```bash
 # Generate self-signed certificate (development)
 openssl req -x509 -newkey rsa:4096 -nodes -out cert.pem -keyout key.pem -days 365
@@ -250,6 +258,7 @@ certbot certonly --standalone -d yourdomain.com
 ```
 
 **API Key Authentication:**
+
 ```bash
 # Generate API keys
 python scripts/generate_api_keys.py
@@ -259,6 +268,7 @@ curl -H "X-API-Key: your-key" http://api.domain.com/api/v1/predict
 ```
 
 **CORS Configuration:**
+
 ```python
 # In main.py
 from fastapi.middleware.cors import CORSMiddleware
@@ -277,6 +287,7 @@ app.add_middleware(
 ### Load Balancing
 
 **Nginx Configuration:**
+
 ```nginx
 upstream crowd_api {
     server backend1:8000;
@@ -309,17 +320,17 @@ cache = Redis(host='localhost', port=6379, db=0, decode_responses=True)
 @app.post("/api/v1/csrnet/predict")
 async def predict(request: PredictionRequest):
     cache_key = f"prediction:{request.image_url}"
-    
+
     # Check cache
     if cache_key in cache:
         return json.loads(cache[cache_key])
-    
+
     # Run inference
     result = await run_inference(request)
-    
+
     # Store in cache (1 hour TTL)
     cache.setex(cache_key, 3600, json.dumps(result))
-    
+
     return result
 ```
 
@@ -338,7 +349,7 @@ engine = create_engine(DATABASE_URL)
 @app.post("/api/v1/predict")
 async def predict(request: PredictionRequest, db: Session = Depends()):
     result = await inference(request)
-    
+
     # Save to database
     db_result = PredictionResult(
         image_url=request.image_url,
@@ -348,7 +359,7 @@ async def predict(request: PredictionRequest, db: Session = Depends()):
     )
     db.add(db_result)
     db.commit()
-    
+
     return result
 ```
 
@@ -449,8 +460,8 @@ Increase GPU memory and batch size:
 
 ```yaml
 inference:
-  batch_size: 4  # Process 4 images simultaneously
-  max_workers: 8  # More concurrent workers
+  batch_size: 4 # Process 4 images simultaneously
+  max_workers: 8 # More concurrent workers
 ```
 
 ## Troubleshooting
@@ -512,10 +523,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      
+
       - name: Build Docker image
         run: docker build -t crowd-counting:${{ github.sha }} .
-      
+
       - name: Push to ECR
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -524,7 +535,7 @@ jobs:
           aws ecr get-login-password --region us-east-1 | \
           docker login --username AWS --password-stdin $ECR_REGISTRY
           docker push $ECR_REGISTRY/crowd-counting:${{ github.sha }}
-      
+
       - name: Deploy to ECS
         run: |
           aws ecs update-service \

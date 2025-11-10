@@ -165,7 +165,7 @@ from locust import HttpUser, task, between
 
 class CrowdCountingUser(HttpUser):
     wait_time = between(1, 3)
-    
+
     @task
     def predict(self):
         self.client.post(
@@ -188,13 +188,13 @@ import statistics
 
 def measure_latency(url, num_requests=10):
     times = []
-    
+
     for _ in range(num_requests):
         start = time.time()
         response = requests.post(url, json={"image_url": "https://example.com/image.jpg"})
         elapsed = time.time() - start
         times.append(elapsed * 1000)  # Convert to ms
-    
+
     print(f"Min: {min(times):.2f}ms")
     print(f"Max: {max(times):.2f}ms")
     print(f"Avg: {statistics.mean(times):.2f}ms")
@@ -242,20 +242,20 @@ def evaluate_model(model, test_loader):
     model.eval()
     predictions = []
     ground_truth = []
-    
+
     with torch.no_grad():
         for images, counts in test_loader:
             output = model(images)
             predictions.extend(output.cpu().numpy())
             ground_truth.extend(counts.cpu().numpy())
-    
+
     mae = mean_absolute_error(ground_truth, predictions)
     mse = mean_squared_error(ground_truth, predictions)
     rmse = np.sqrt(mse)
-    
+
     print(f"MAE: {mae:.2f}")
     print(f"RMSE: {rmse:.2f}")
-    
+
     return {"mae": mae, "rmse": rmse}
 
 # Run evaluation
@@ -284,27 +284,27 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.8, 3.9, '3.10', 3.11]
-    
+        python-version: [3.8, 3.9, "3.10", 3.11]
+
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-    
-    - name: Install dependencies
-      run: |
-        pip install -r requirements.txt
-        pip install pytest pytest-cov
-    
-    - name: Run tests
-      run: |
-        pytest tests/ --cov=app --cov-report=xml
-    
-    - name: Upload coverage
-      uses: codecov/codecov-action@v3
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run tests
+        run: |
+          pytest tests/ --cov=app --cov-report=xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
 ```
 
 ## Test Data
@@ -325,14 +325,14 @@ def generate_random_image(width=640, height=480):
 def generate_crowd_image(num_people=50):
     """Generate synthetic crowd image"""
     img = np.ones((480, 640, 3), dtype=np.uint8) * 255
-    
+
     # Add circles to simulate people
     for _ in range(num_people):
         x = np.random.randint(10, 630)
         y = np.random.randint(10, 470)
         radius = np.random.randint(5, 15)
         cv2.circle(img, (x, y), radius, (0, 0, 255), -1)
-    
+
     return img
 
 # Generate and save
@@ -351,47 +351,47 @@ from datetime import datetime
 
 def run_regression_test():
     """Test results remain consistent across versions"""
-    
+
     test_images = [
         "https://example.com/test1.jpg",
         "https://example.com/test2.jpg",
         "https://example.com/test3.jpg"
     ]
-    
+
     results = {}
-    
+
     for img in test_images:
         response = requests.post(
             "http://localhost:8000/api/v1/predict",
             json={"image_url": img}
         )
         results[img] = response.json()
-    
+
     # Save baseline
     with open("tests/baseline_results.json", "w") as f:
         json.dump(results, f, indent=2)
-    
+
     print("✓ Baseline saved")
 
 # Compare with new version
 def compare_results():
     with open("tests/baseline_results.json") as f:
         baseline = json.load(f)
-    
+
     tolerance = 0.1  # Allow 10% variation
-    
+
     for img, baseline_result in baseline.items():
         response = requests.post(
             "http://localhost:8000/api/v1/predict",
             json={"image_url": img}
         )
         new_result = response.json()
-        
+
         baseline_count = baseline_result["ensemble_count"]
         new_count = new_result["ensemble_count"]
-        
+
         diff_percent = abs(new_count - baseline_count) / baseline_count
-        
+
         if diff_percent > tolerance:
             print(f"✗ {img}: Baseline {baseline_count} → New {new_count}")
         else:
@@ -406,27 +406,32 @@ def compare_results():
 # Test Results - 2024-01-15
 
 ## Unit Tests
+
 - ✓ test_models.py: 12/12 passed
 - ✓ test_preprocessing.py: 8/8 passed
 - ✓ test_csrnet_api.py: 15/15 passed
 
 ## Integration Tests
+
 - ✓ API endpoints responding
 - ✓ Model loading successful
 - ✓ Predictions consistent
 
 ## Performance
+
 - CSRNet latency: 75ms average
 - VMamba latency: 40ms average
 - Memory usage: 4.2GB
 - GPU utilization: 82%
 
 ## Accuracy
+
 - CSRNet MAE: 7.6
 - VMamba accuracy: 91%
 - Ensemble confidence: 0.89
 
 ## Regression
+
 - ✓ Results within tolerance
 - ✓ No performance degradation
 ```

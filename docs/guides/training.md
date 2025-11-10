@@ -61,35 +61,35 @@ import json
 
 def generate_density_map(image_path, points, sigma=15):
     """Generate density map from crowd points"""
-    
+
     image = cv2.imread(image_path, 0)
     h, w = image.shape
-    
+
     # Create density map
     density = np.zeros((h, w))
-    
+
     for point in points:
         if 0 <= point[0] < w and 0 <= point[1] < h:
             density[int(point[1]), int(point[0])] += 1
-    
+
     # Apply Gaussian filter
     density = gaussian_filter(density, sigma=sigma)
-    
+
     return density
 
 def preprocess_dataset(dataset_path, output_path):
     """Preprocess entire dataset"""
-    
+
     import os
     from pathlib import Path
-    
+
     os.makedirs(output_path, exist_ok=True)
-    
+
     for image_file in os.listdir(os.path.join(dataset_path, 'images')):
         image_path = os.path.join(dataset_path, 'images', image_file)
         points_file = image_file.replace('.jpg', '.txt')
         points_path = os.path.join(dataset_path, 'ground-truth', points_file)
-        
+
         # Load points
         points = []
         if os.path.exists(points_path):
@@ -97,18 +97,18 @@ def preprocess_dataset(dataset_path, output_path):
                 for line in f:
                     x, y = map(float, line.strip().split(','))
                     points.append([x, y])
-        
+
         # Generate density map
         density = generate_density_map(image_path, points)
-        
+
         # Save
         output_file = os.path.join(output_path, image_file.replace('.jpg', '.npy'))
         np.save(output_file, density)
-        
+
         print(f"Processed: {image_file}, Count: {len(points)}")
 
 # Run preprocessing
-preprocess_dataset('ml/datasets/shanghaitech/part_A/train_data', 
+preprocess_dataset('ml/datasets/shanghaitech/part_A/train_data',
                    'ml/datasets/shanghaitech/processed/part_A/train_data')
 ```
 
@@ -131,15 +131,15 @@ training:
   learning_rate: 0.0001
   weight_decay: 0.0005
   momentum: 0.95
-  
+
   # Optimization
   optimizer: "Adam"
   scheduler: "ReduceLROnPlateau"
-  
+
   # Regularization
   dropout: 0.5
   augmentation: true
-  
+
   # Mixed precision
   mixed_precision: true
   accumulation_steps: 8
@@ -200,11 +200,11 @@ import tensorboard
 
 def train_csrnet(config):
     """Train CSRNet model"""
-    
+
     # Load model
     model = CSRNet(dilations=config['model']['dilations'])
     model.to('cuda:0')
-    
+
     # Load dataset
     train_dataset = CrowdDataset(
         config['paths']['dataset'],
@@ -216,38 +216,38 @@ def train_csrnet(config):
         shuffle=True,
         num_workers=4
     )
-    
+
     # Optimizer
     optimizer = Adam(
         model.parameters(),
         lr=config['training']['learning_rate'],
         weight_decay=config['training']['weight_decay']
     )
-    
+
     # Loss function
     criterion = nn.MSELoss()
-    
+
     # Mixed precision
     scaler = GradScaler() if config['training']['mixed_precision'] else None
-    
+
     # TensorBoard
     writer = SummaryWriter(config['paths']['tensorboard'])
-    
+
     # Training loop
     for epoch in range(config['training']['epochs']):
         total_loss = 0
-        
+
         for batch_idx, (images, density_maps) in enumerate(train_loader):
             images = images.to('cuda:0')
             density_maps = density_maps.to('cuda:0')
-            
+
             optimizer.zero_grad()
-            
+
             if scaler:
                 with autocast():
                     output = model(images)
                     loss = criterion(output, density_maps)
-                
+
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
@@ -256,34 +256,34 @@ def train_csrnet(config):
                 loss = criterion(output, density_maps)
                 loss.backward()
                 optimizer.step()
-            
+
             total_loss += loss.item()
-            
+
             if (batch_idx + 1) % 10 == 0:
                 print(f"Epoch {epoch+1}, Batch {batch_idx+1}: Loss = {loss.item():.4f}")
-        
+
         avg_loss = total_loss / len(train_loader)
         writer.add_scalar('Loss/train', avg_loss, epoch)
-        
+
         # Save checkpoint
         if (epoch + 1) % 10 == 0:
             torch.save(
                 model.state_dict(),
                 f"{config['paths']['weights']}/csrnet_epoch_{epoch+1}.pth"
             )
-        
+
         print(f"Epoch {epoch+1} completed. Average Loss: {avg_loss:.4f}")
-    
+
     writer.close()
     print("Training completed!")
 
 # Run training
 if __name__ == "__main__":
     import yaml
-    
+
     with open('csrnet_config.yaml') as f:
         config = yaml.safe_load(f)
-    
+
     train_csrnet(config)
 ```
 
@@ -295,7 +295,7 @@ if __name__ == "__main__":
 # ml/config/vmamba_finetune.yaml
 model:
   type: "vmamba"
-  variant: "tiny"  # tiny, small, base
+  variant: "tiny" # tiny, small, base
   pretrained: true
   num_classes: 1
 
@@ -304,13 +304,13 @@ training:
   batch_size: 4
   learning_rate: 0.0001
   warmup_epochs: 5
-  
+
   # Data augmentation
   augmentation:
     random_crop: true
     horizontal_flip: true
     color_jitter: true
-    
+
   # Regularization
   dropout: 0.1
   stochastic_depth: 0.1
@@ -385,10 +385,10 @@ for params in product(*param_grid.values()):
         'batch_size': params[1],
         'weight_decay': params[2]
     }
-    
+
     print(f"Training with {config}")
     mae = train_csrnet(config)
-    
+
     if mae < best_mae:
         best_mae = mae
         best_params = config
@@ -452,33 +452,33 @@ epoch = checkpoint['epoch']
 ```python
 def evaluate_model(model, test_loader):
     """Evaluate model on test set"""
-    
+
     model.eval()
     total_mae = 0
     total_mse = 0
-    
+
     with torch.no_grad():
         for images, density_maps in test_loader:
             images = images.to('cuda:0')
             density_maps = density_maps.to('cuda:0')
-            
+
             output = model(images)
-            
+
             pred_count = output.sum().item()
             true_count = density_maps.sum().item()
-            
+
             mae = abs(pred_count - true_count)
             mse = (pred_count - true_count) ** 2
-            
+
             total_mae += mae
             total_mse += mse
-    
+
     avg_mae = total_mae / len(test_loader)
     avg_rmse = (total_mse / len(test_loader)) ** 0.5
-    
+
     print(f"Test MAE: {avg_mae:.2f}")
     print(f"Test RMSE: {avg_rmse:.2f}")
-    
+
     return {'mae': avg_mae, 'rmse': avg_rmse}
 ```
 
@@ -547,17 +547,20 @@ model = DDP(model, device_ids=[rank])
 ## Common Issues
 
 ### Out of Memory
+
 - Reduce batch size
 - Enable mixed precision
 - Reduce image size
 
 ### Slow Training
+
 - Increase number of workers in DataLoader
 - Enable persistent_workers
 - Use mixed precision training
 - Profile with py-spy
 
 ### Poor Accuracy
+
 - Check data preprocessing
 - Verify annotations
 - Increase training epochs

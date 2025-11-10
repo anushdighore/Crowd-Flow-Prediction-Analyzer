@@ -7,11 +7,13 @@ Solutions for common issues and problems.
 ### Issue: "ModuleNotFoundError" when importing packages
 
 **Symptom:**
+
 ```
 ModuleNotFoundError: No module named 'torch'
 ```
 
 **Solutions:**
+
 ```bash
 # 1. Verify installation
 pip list | grep torch
@@ -29,6 +31,7 @@ which python  # Should point to venv location
 ### Issue: GPU not detected
 
 **Symptom:**
+
 ```python
 >>> import torch
 >>> torch.cuda.is_available()
@@ -36,6 +39,7 @@ False
 ```
 
 **Solutions:**
+
 ```bash
 # 1. Check NVIDIA driver
 nvidia-smi
@@ -57,11 +61,13 @@ pip install torch torchvision torchaudio
 ### Issue: "NumPy version mismatch"
 
 **Symptom:**
+
 ```
 RuntimeError: module compiled against API version 0x10 but this version of numpy is 0x9
 ```
 
 **Solutions:**
+
 ```bash
 # 1. Check NumPy version
 python -c "import numpy; print(numpy.__version__)"
@@ -81,11 +87,13 @@ pip install -r requirements.txt --force-reinstall
 ### Issue: "Address already in use" error
 
 **Symptom:**
+
 ```
 OSError: [Errno 48] Address already in use
 ```
 
 **Solutions:**
+
 ```bash
 # 1. Find process using port 8000
 # Linux/Mac:
@@ -114,6 +122,7 @@ python run.py
 ### Issue: Server crashes on startup
 
 **Symptom:**
+
 ```
 Traceback (most recent call last):
   File "run.py", line X, in <module>
@@ -122,6 +131,7 @@ RuntimeError: CUDA out of memory
 ```
 
 **Solutions:**
+
 ```bash
 # 1. Reduce GPU memory usage in config/config.yaml
 inference:
@@ -147,11 +157,13 @@ nvidia-smi
 ### Issue: Model loading fails
 
 **Symptom:**
+
 ```
 FileNotFoundError: [Errno 2] No such file or directory: '/models/csrnet.pth'
 ```
 
 **Solutions:**
+
 ```bash
 # 1. Verify model paths
 ls -la backend/models/
@@ -175,11 +187,13 @@ models:
 ### Issue: 400 Bad Request error
 
 **Symptom:**
+
 ```json
-{"error": "Invalid input: image_url is required"}
+{ "error": "Invalid input: image_url is required" }
 ```
 
 **Solutions:**
+
 ```bash
 # 1. Check request format
 curl -X POST http://localhost:8000/api/v1/csrnet/predict \
@@ -202,11 +216,13 @@ curl -X POST http://localhost:8000/api/v1/csrnet/predict \
 ### Issue: 500 Internal Server Error
 
 **Symptom:**
+
 ```json
-{"error": "Internal Server Error"}
+{ "error": "Internal Server Error" }
 ```
 
 **Solutions:**
+
 ```bash
 # 1. Check backend logs
 tail -f backend.log
@@ -228,11 +244,13 @@ python run.py
 ### Issue: 504 Gateway Timeout
 
 **Symptom:**
+
 ```
 Request timeout after 30 seconds
 ```
 
 **Solutions:**
+
 ```bash
 # 1. Increase timeout in config
 inference:
@@ -256,11 +274,13 @@ curl -X POST http://localhost:8000/api/v1/tmtb/predict
 ### Issue: "Image format not supported"
 
 **Symptom:**
+
 ```json
-{"error": "Unsupported image format"}
+{ "error": "Unsupported image format" }
 ```
 
 **Solutions:**
+
 ```bash
 # 1. Verify image format
 file image.jpg
@@ -283,11 +303,13 @@ wget https://example.com/valid_image.jpg
 ### Issue: "Image too large" error
 
 **Symptom:**
+
 ```json
-{"error": "Image exceeds maximum size"}
+{ "error": "Image exceeds maximum size" }
 ```
 
 **Solutions:**
+
 ```bash
 # 1. Check file size
 ls -lh image.jpg
@@ -314,11 +336,13 @@ api:
 ### Issue: Poor prediction results
 
 **Symptom:**
+
 ```json
-{"count": 999, "confidence": 0.2}
+{ "count": 999, "confidence": 0.2 }
 ```
 
 **Solutions:**
+
 ```bash
 # 1. Check image quality
 # Image should be:
@@ -345,11 +369,13 @@ curl -X POST http://localhost:8000/api/v1/predict
 ### Issue: "CUDA out of memory"
 
 **Symptom:**
+
 ```
 torch.cuda.OutOfMemoryError: CUDA out of memory
 ```
 
 **Solutions:**
+
 ```bash
 # 1. Clear GPU cache
 python -c "import torch; torch.cuda.empty_cache()"
@@ -375,11 +401,13 @@ nvidia-smi
 ### Issue: "Memory leak during inference"
 
 **Symptom:**
+
 ```
 GPU memory usage keeps increasing
 ```
 
 **Solutions:**
+
 ```python
 # 1. Ensure proper cleanup in inference code
 import torch
@@ -405,11 +433,13 @@ print(f"RAM: {psutil.virtual_memory().percent}%")
 ### Issue: "Connection refused" from frontend
 
 **Symptom:**
+
 ```
 Error: connect ECONNREFUSED 127.0.0.1:8000
 ```
 
 **Solutions:**
+
 ```bash
 # 1. Verify backend is running
 curl http://localhost:8000/health
@@ -436,11 +466,13 @@ REACT_APP_API_URL=http://localhost:8000
 ### Issue: "No image preview in frontend"
 
 **Symptom:**
+
 ```
 Image shows as broken link
 ```
 
 **Solutions:**
+
 ```bash
 # 1. Check base64 encoding
 # Verify heatmap field is valid base64
@@ -459,11 +491,13 @@ curl -X POST http://localhost:8000/api/v1/csrnet/predict \
 ### Issue: Slow inference time
 
 **Symptom:**
+
 ```
 Processing time > 1 second per image
 ```
 
 **Solutions:**
+
 ```bash
 # 1. Check GPU utilization
 nvidia-smi
