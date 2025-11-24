@@ -30,7 +30,7 @@ def get_model(checkpoint_path: str = None):
     return model
 
 
-def predict(image: Union[str, Path, Image.Image], checkpoint_path: str = None, source: str = "image", return_boxes: bool = False) -> Dict:
+def predict(image: Union[str, Path, Image.Image], checkpoint_path: str = None, source: str = "image", return_boxes: bool = False, visualize: bool = False) -> Dict:
     """Run YOLO prediction for crowd counting
     
     Args:
@@ -38,6 +38,7 @@ def predict(image: Union[str, Path, Image.Image], checkpoint_path: str = None, s
         checkpoint_path: Path to model checkpoint
         source: Input source type (for compatibility)
         return_boxes: Whether to return bounding boxes
+        visualize: Whether to return annotated image
     """
     start_time = time.time()
     
@@ -55,8 +56,11 @@ def predict(image: Union[str, Path, Image.Image], checkpoint_path: str = None, s
     # Get model
     model = get_model(checkpoint_path)
     
-    # Run inference
-    result = model.predict(img_np, return_boxes=return_boxes, visualize=True)
+    # Run inference - only pass visualize if True to avoid compatibility issues
+    if visualize:
+        result = model.predict(img_np, return_boxes=return_boxes, visualize=True)
+    else:
+        result = model.predict(img_np, return_boxes=return_boxes)
     
     inference_time = (time.time() - start_time) * 1000
     
@@ -71,9 +75,35 @@ def predict(image: Union[str, Path, Image.Image], checkpoint_path: str = None, s
         "model_type": "yolo"
     }
     
-    # Add boxes if requested
-    if return_boxes and 'boxes' in result:
-        response["boxes"] = result['boxes']
+    # Add boxes if requested and transform to expected format
+    if return_boxes and 'boxes' in result and len(result['boxes']) > 0:
+        # Transform boxes from {bbox: [...], confidence: ...} to {x1, y1, x2, y2, confidence}
+        transformed_boxes = []
+        confidences = []
+        
+        logger.info(f"📦 Transforming {len(result['boxes'])} boxes from YOLOv8Counter format")
+        
+        for box_info in result['boxes']:
+            bbox = box_info['bbox']
+            conf = box_info['confidence']
+            confidences.append(conf)
+            
+            transformed_boxes.append({
+                'x1': int(bbox[0]),
+                'y1': int(bbox[1]),
+                'x2': int(bbox[2]),
+                'y2': int(bbox[3]),
+                'confidence': float(conf)
+            })
+        
+        response["boxes"] = transformed_boxes
+        logger.info(f"✅ Transformed boxes: {len(transformed_boxes)} boxes in x1,y1,x2,y2 format")
+        
+        # Calculate confidence statistics
+        if confidences:
+            response["average_confidence"] = float(np.mean(confidences))
+            response["min_confidence"] = float(np.min(confidences))
+            response["max_confidence"] = float(np.max(confidences))
     
     # Add annotated image if available (for visualization)
     if 'annotated_image' in result:
@@ -83,23 +113,46 @@ def predict(image: Union[str, Path, Image.Image], checkpoint_path: str = None, s
 
 
 def generate_heatmap(boxes: list, original_image: Image.Image) -> np.ndarray:
-    """Generate heatmap from YOLO bounding boxes
+    """Generate heatmap from YOLO detection boxes
     
     Args:
-        boxes: List of bounding box dictionaries
+        boxes: List of box dictionaries with bbox and confidence OR x1,y1,x2,y2 format
         original_image: Original PIL image
         
     Returns:
         BGR image with heatmap overlay
     """
+    # Safety check for empty boxes
+    if not boxes or len(boxes) == 0:
+        logger.warning("⚠️ No boxes provided to generate_heatmap, returning original image")
+        # Return original image as BGR
+        import cv2
+        original_bgr = cv2.cvtColor(np.array(original_image), cv2.COLOR_RGB2BGR)
+        return original_bgr
+    
+    logger.info(f"🎨 Generating heatmap for {len(boxes)} boxes")
+    logger.debug(f"📋 First box format: {boxes[0].keys() if boxes else 'N/A'}")
+    
     # Create density map from boxes
     width, height = original_image.size
     density_map = np.zeros((height, width), dtype=np.float32)
     
     # Add Gaussian blobs for each detection
     for box_info in boxes:
-        bbox = box_info['bbox']  # [x1, y1, x2, y2]
-        x1, y1, x2, y2 = map(int, bbox)
+        try:
+            # Handle both formats: {bbox: [...]} and {x1, y1, x2, y2}
+            if 'bbox' in box_info:
+                bbox = box_info['bbox']  # [x1, y1, x2, y2]
+                x1, y1, x2, y2 = map(int, bbox)
+            else:
+                # Already in x1, y1, x2, y2 format
+                x1 = int(box_info['x1'])
+                y1 = int(box_info['y1'])
+                x2 = int(box_info['x2'])
+                y2 = int(box_info['y2'])
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"❌ Error parsing box {box_info}: {e}")
+            continue
         
         # Center of box
         cx = (x1 + x2) // 2

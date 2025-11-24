@@ -1,0 +1,163 @@
+/* ExternalCameraPage.css */
+.external-camera-page {
+  width: 100%;
+  background: transparent;
+}
+
+.external-camera-header {
+  background: white;
+  padding: 2rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  gap: 1rem;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex: 1;
+}
+
+/* Show hamburger on smaller screens */
+@media (max-width: 768px) {
+  .external-camera-header {
+    padding: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .header-left {
+    gap: 1rem;
+    width: 100%;
+  }
+
+  .external-camera-title h1 {
+    font-size: 1.8rem;
+  }
+
+  .external-camera-title p {
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .external-camera-header {
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .header-left {
+    gap: 0.5rem;
+  }
+
+  .external-camera-title h1 {
+    font-size: 1.4rem;
+  }
+
+  .external-camera-title p {
+    display: none;
+  }
+
+  .btn-logout {
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
+  }
+}
+
+.external-camera-title h1 {
+  margin: 0;
+  font-size: 2.5rem;
+  color: #333;
+}
+
+.external-camera-title p {
+  margin: 0.5rem 0 0;
+  color: #666;
+  font-size: 1rem;
+}
+
+.btn-logout {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-logout:hover {
+  background: #c82333;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(220, 53, 69, 0.3);
+}
+
+.external-camera-main {
+  width: 100%;
+  margin: 0;
+  padding: 2rem;
+}
+
+.external-camera-main h2 {
+  font-size: 1.8rem;
+  color: #333;
+  margin-bottom: 1.5rem;
+}
+
+.not-authenticated {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  text-align: center;
+}
+
+.not-authenticated p {
+  font-size: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.not-authenticated button {
+  background: white;
+  color: #667eea;
+  border: none;
+  padding: 0.75rem 2rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.not-authenticated button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .external-camera-header {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+
+  .external-camera-title h1 {
+    font-size: 1.8rem;
+  }
+
+  .external-camera-main {
+    padding: 1rem;
+  }
+
+  .external-camera-main h2 {
+    font-size: 1.5rem;
+  }
+}

@@ -28,16 +28,16 @@ preprocessing:
     breadth: 200 # Height for uploaded images
 
   webcam:
-    length: 64 # Width for webcam frames
-    breadth: 64 # Height for webcam frames
+    length: 200 # Width for webcam frames
+    breadth: 200 # Height for webcam frames
 
   video:
-    length: 64 # Width for video frames
-    breadth: 64 # Height for video frames
+    length: 200 # Width for video frames
+    breadth: 200 # Height for video frames
 
   surveillance:
-    length: 64 # Width for surveillance camera
-    breadth: 64 # Height for surveillance camera
+    length: 200 # Width for surveillance camera
+    breadth: 200 # Height for surveillance camera
 
   # Target input size [height, width]
   # CSRNet is fully convolutional, so this is flexible

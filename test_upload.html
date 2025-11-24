@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Test YOLO Upload</title>
+  </head>
+  <body>
+    <h1>Test YOLO Image Upload</h1>
+
+    <input type="file" id="fileInput" accept="image/*" />
+    <button onclick="testUpload()">Test Upload</button>
+
+    <div id="result"></div>
+
+    <script>
+      async function testUpload() {
+        const fileInput = document.getElementById("fileInput");
+        const resultDiv = document.getElementById("result");
+
+        if (!fileInput.files[0]) {
+          resultDiv.innerHTML =
+            '<p style="color: red;">Please select a file first</p>';
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", fileInput.files[0]);
+
+        resultDiv.innerHTML = "<p>Uploading...</p>";
+
+        try {
+          console.log(
+            "Sending request to http://localhost:8000/api/v1/yolo/detect"
+          );
+
+          const response = await fetch(
+            "http://localhost:8000/api/v1/yolo/detect",
+            {
+              method: "POST",
+              body: formData,
+            }
+          );
+
+          console.log("Response status:", response.status);
+          console.log("Response ok:", response.ok);
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+          }
+
+          const data = await response.json();
+          console.log("Success:", data);
+
+          resultDiv.innerHTML = `
+                    <h3 style="color: green;">Success!</h3>
+                    <p><strong>Count:</strong> ${data.count}</p>
+                    <p><strong>Boxes:</strong> ${data.num_boxes}</p>
+                    <p><strong>Inference Time:</strong> ${data.inference_time_ms}ms</p>
+                    <p><strong>Device:</strong> ${data.device}</p>
+                `;
+
+          if (data.annotated_image) {
+            resultDiv.innerHTML += `<img src="${data.annotated_image}" style="max-width: 600px;">`;
+          }
+        } catch (error) {
+          console.error("Error:", error);
+          resultDiv.innerHTML = `
+                    <h3 style="color: red;">Error!</h3>
+                    <p>${error.message}</p>
+                    <pre>${error.stack}</pre>
+                `;
+        }
+      }
+    </script>
+  </body>
+</html>

@@ -87,6 +87,7 @@ async def detect(file: UploadFile = File(...)):
             "inference_time_ms": result["inference_time_ms"],
             "device": result["device"],
             "model": "YOLOv8",
+            "approach": "Object Detection",
             "boxes": result.get("boxes", []),
             "num_boxes": len(result.get("boxes", [])),
             "average_confidence": result.get("average_confidence", 0.0),
@@ -217,3 +218,76 @@ async def info():
             "vs_ensemble": "Single model vs ensemble. Ensemble more robust but slower."
         }
     }
+
+@router.post("/track")
+async def track_with_kalman(file: UploadFile = File(...)):
+    """YOLO detection with Kalman filter tracking (V3 Feature)
+    
+    Returns tracking information including:
+        - Current count
+        - Unique track count (total people seen)
+        - Track IDs and positions
+        - Annotated image with trajectories
+    """
+    try:
+        from app.services.ml_processor import ml_processor
+        
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents)).convert('RGB')
+        
+        # Convert PIL to numpy
+        import numpy as np
+        frame = np.array(image)
+        
+        # Process with tracking enabled
+        result = ml_processor.process_frame(frame, return_details=True)
+        
+        response = {
+            "status": "success",
+            "count": result.get("count", 0),
+            "unique_count": result.get("unique_count", 0),
+            "tracking_enabled": result.get("tracking_enabled", False),
+            "inference_time_ms": result.get("inference_time_ms", 0),
+            "device": result.get("device", "unknown"),
+            "model": "YOLOv8 + Kalman Tracker",
+        }
+        
+        # Add track details
+        if "tracks" in result:
+            response["tracks"] = result["tracks"]
+            response["num_tracks"] = len(result["tracks"])
+        
+        # Add annotated image
+        if "annotated_frame" in result:
+            try:
+                buffered = io.BytesIO()
+                annotated_pil = Image.fromarray(result["annotated_frame"])
+                annotated_pil.save(buffered, format="JPEG")
+                img_base64 = base64.b64encode(buffered.getvalue()).decode()
+                response["annotated_image"] = f"data:image/jpeg;base64,{img_base64}"
+            except Exception as viz_error:
+                logger.warning(f"Could not generate tracking visualization: {viz_error}")
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"YOLO tracking error: {e}")
+        raise HTTPException(status_code=500, detail=f"YOLO tracking failed: {str(e)}")
+
+@router.post("/reset_tracker")
+async def reset_tracker():
+    """Reset the Kalman tracker state (V3 Feature)
+    
+    Use this between different videos or when starting a new tracking session
+    """
+    try:
+        from app.services.ml_processor import ml_processor
+        ml_processor.reset_tracking()
+        
+        return {
+            "status": "success",
+            "message": "Tracker reset successfully"
+        }
+    except Exception as e:
+        logger.error(f"Tracker reset error: {e}")
+        raise HTTPException(status_code=500, detail=f"Tracker reset failed: {str(e)}")

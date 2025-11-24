@@ -1,0 +1,137 @@
+/* Layout Component - Simple Flexbox 3-Part Layout */
+/* Part 1: Navigation (Top) - Highest Priority (z-index: 1000) */
+/* Part 2: Sidebar Menu (Left) - Second Priority (z-index: 990) */
+/* Part 3: Main Content (Right) - Content Area */
+
+/* ROOT CONTAINER - Full Height, Full Width */
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg-primary);
+  overflow: hidden;
+}
+
+/* ===== PART 1: NAVIGATION BAR (Top, Full Width) ===== */
+.layout-nav-bar {
+  width: 100%;
+  height: 65px;
+  background: var(--navbar-bg);
+  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+/* ===== PART 2 & 3: MAIN CONTAINER (Below Nav) ===== */
+.layout-main-container {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ===== PART 2: SIDEBAR MENU (Left, Static) ===== */
+.layout-sidebar {
+  width: 60px;
+  height: 100%;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border-primary);
+  overflow: visible;
+  flex-shrink: 0;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 990;
+  position: relative;
+}
+
+/* Sidebar in open state */
+.layout-sidebar.menu-open {
+  width: 280px;
+}
+
+/* ===== PART 3: MAIN CONTENT AREA (Right, Scrollable) ===== */
+.layout-content {
+  flex: 1;
+  height: 100%;
+  padding: 0;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Main content scrollbar styling */
+.layout-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.layout-content::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+.layout-content::-webkit-scrollbar-thumb {
+  background: var(--border-secondary);
+  border-radius: 4px;
+}
+
+.layout-content::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* Content children */
+.layout-content > * {
+  width: 100%;
+}
+
+/* ===== RESPONSIVE DESIGN ===== */
+@media (max-width: 768px) {
+  .layout-nav-bar {
+    height: 60px;
+  }
+
+  .layout-content {
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .layout-content {
+    padding: 1rem;
+  }
+
+  .layout-nav-bar {
+    height: 56px;
+  }
+}
+
+/* ===== ACCESSIBILITY ===== */
+.layout-content:focus-within {
+  outline: none;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: more) {
+  .layout-nav-bar {
+    border-bottom-width: 2px;
+  }
+
+  .layout-sidebar {
+    border-right-width: 2px;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .layout-sidebar {
+    transition: none;
+  }
+}

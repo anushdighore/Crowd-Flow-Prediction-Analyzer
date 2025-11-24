@@ -45,7 +45,9 @@ def get_model(checkpoint_path: str = None):
         checkpoint_path = str(Path(__file__).parent.parent.parent.parent / "checkpoints" / "csrnet.pth")
     if checkpoint_path in _model_cache:
         return _model_cache[checkpoint_path]
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # Force CPU to avoid CUDA errors - CSRNet model is lightweight enough for CPU
+    device = torch.device('cpu')
+    logger.info(f"🖥️  Using device: {device}")
     model = load_csrnet(checkpoint_path, device=str(device))
     _model_cache[checkpoint_path] = model
     return model
@@ -61,8 +63,11 @@ def generate_heatmap(density_map: torch.Tensor, original_image: Image.Image) -> 
     Returns:
         BGR image with heatmap overlay (ready for cv2.imencode)
     """
-    # Convert density map to numpy
-    density_np = density_map.squeeze().cpu().numpy()
+    # Convert density map to numpy (handle both CPU and GPU tensors)
+    if density_map.device.type == 'cuda':
+        density_np = density_map.squeeze().cpu().detach().numpy()
+    else:
+        density_np = density_map.squeeze().detach().numpy()
     
     # Normalize to 0-255
     density_normalized = density_np / (density_np.max() + 1e-8)
@@ -136,8 +141,6 @@ def predict(image: Union[str, Path, Image.Image], checkpoint_path: str = None, s
     # Run inference
     with torch.no_grad():
         density_map = model(img_tensor)
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
         count = density_map.sum().item()
     
     inference_time = (time.time() - start_time) * 1000

@@ -1,0 +1,742 @@
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import "./styles/WebcamCounter.css";
+import TrajectoryCanvas from "./components/TrajectoryCanvas";
+import HeatmapOverlay from "./components/Heatmap/HeatmapOverlay";
+import CountDisplay from "./components/CountDisplay";
+import AdvancedMetrics from "./components/AdvancedMetrics";
+
+function WebcamCounter() {
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [results, setResults] = useState(null);
+  const [error, setError] = useState(null);
+  const [fps, setFps] = useState(0);
+  const [frameCount, setFrameCount] = useState(0);
+  const [selectedModel, setSelectedModel] = useState("yolo-nano"); // Model selection
+  const [enableTracking, setEnableTracking] = useState(false);
+  const [enableHeatmap, setEnableHeatmap] = useState(false);
+  const [uniqueCount, setUniqueCount] = useState(0);
+  const [heatmapImage, setHeatmapImage] = useState(null);
+  const [autoSwitch, setAutoSwitch] = useState(false); // Auto-switching mode
+  const [autoSwitchThreshold, setAutoSwitchThreshold] = useState(30); // Threshold for switching
+  const [currentAutoModel, setCurrentAutoModel] = useState("yolo-nano"); // Currently selected auto model
+
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const wsRef = useRef(null);
+  const streamRef = useRef(null);
+  const intervalRef = useRef(null);
+
+  // Start webcam
+  const startWebcam = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480 },
+        audio: false,
+      });
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        streamRef.current = stream;
+      }
+
+      setError(null);
+    } catch (err) {
+      setError(`Failed to access webcam: ${err.message}`);
+      console.error("Webcam error:", err);
+    }
+  }, []);
+
+  // Stop webcam
+  const stopWebcam = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }, []);
+
+  // Connect to WebSocket
+  const connectWebSocket = useCallback(() => {
+    try {
+      const ws = new WebSocket("ws://localhost:8000/ws/count");
+
+      ws.onopen = () => {
+        console.log("✅ WebSocket connected");
+        setError(null);
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.success) {
+          setResults(data);
+          setFps(data.fps || 0);
+          setFrameCount(data.frame_number || 0);
+
+          // Debug: Log tracking data
+          if (enableTracking) {
+            console.log("🎯 Tracking enabled - Received data:", {
+              hasTracks: !!data.tracks,
+              trackCount: data.tracks?.length || 0,
+              uniqueCount: data.unique_count,
+              tracks: data.tracks,
+            });
+          }
+
+          // Update unique count if tracking is enabled
+          if (enableTracking && data.unique_count !== undefined) {
+            setUniqueCount(data.unique_count);
+          }
+
+          // Update heatmap if enabled
+          if (enableHeatmap && data.heatmap) {
+            setHeatmapImage(data.heatmap);
+          }
+
+          // Auto-switch logic based on count
+          if (autoSwitch && data.count !== undefined) {
+            const count = data.count;
+            if (
+              count < autoSwitchThreshold &&
+              !currentAutoModel.startsWith("yolo")
+            ) {
+              // Switch to YOLO for low count
+              setCurrentAutoModel("yolo-nano");
+              console.log(
+                `🔄 Auto-switched to YOLO (count: ${count} < ${autoSwitchThreshold})`
+              );
+            } else if (
+              count >= autoSwitchThreshold &&
+              currentAutoModel.startsWith("yolo")
+            ) {
+              // Switch to CSRNet for high count
+              setCurrentAutoModel("csrnet");
+              console.log(
+                `🔄 Auto-switched to CSRNet (count: ${count} >= ${autoSwitchThreshold})`
+              );
+            }
+          }
+        } else {
+          console.error("Processing error:", data.error);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        setError("WebSocket connection error");
+      };
+
+      ws.onclose = () => {
+        console.log("❌ WebSocket disconnected");
+        if (isStreaming) {
+          setError("Connection lost. Please restart.");
+        }
+      };
+
+      wsRef.current = ws;
+    } catch (err) {
+      setError(`Failed to connect to server: ${err.message}`);
+    }
+  }, [isStreaming]);
+
+  // Disconnect WebSocket
+  const disconnectWebSocket = useCallback(() => {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+  }, []);
+
+  // Capture and send frame
+  const captureAndSendFrame = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current || !wsRef.current) {
+      return;
+    }
+
+    // Check if WebSocket is ready
+    if (wsRef.current.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    try {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const context = canvas.getContext("2d");
+
+      // Set canvas size to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      // Draw current video frame to canvas
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Convert to base64
+      const frameData = canvas.toDataURL("image/jpeg", 0.8);
+
+      // Determine which model to use
+      const modelToUse = autoSwitch ? currentAutoModel : selectedModel;
+
+      // Send to server with model selection
+      wsRef.current.send(
+        JSON.stringify({
+          frame: frameData,
+          model: modelToUse,
+          tracking: enableTracking,
+          heatmap: enableHeatmap,
+        })
+      );
+    } catch (err) {
+      console.error("Frame capture error:", err);
+    }
+  }, [
+    selectedModel,
+    enableTracking,
+    enableHeatmap,
+    autoSwitch,
+    currentAutoModel,
+  ]);
+
+  // Start streaming
+  const handleStartStreaming = async () => {
+    await startWebcam();
+    connectWebSocket();
+
+    // Start sending frames (every 100ms = ~10 FPS)
+    intervalRef.current = setInterval(captureAndSendFrame, 100);
+
+    setIsStreaming(true);
+    setResults(null);
+  };
+
+  // Stop streaming
+  const handleStopStreaming = () => {
+    // Clear interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    // Disconnect WebSocket
+    disconnectWebSocket();
+
+    // Stop webcam
+    stopWebcam();
+
+    setIsStreaming(false);
+    setResults(null);
+    setFps(0);
+    setFrameCount(0);
+    setUniqueCount(0);
+    setHeatmapImage(null);
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+      disconnectWebSocket();
+      stopWebcam();
+    };
+  }, [disconnectWebSocket, stopWebcam]);
+
+  return (
+    <div className="webcam-counter">
+      <div className="webcam-header">
+        <h2>🎥 Real-Time Webcam Crowd Counter</h2>
+        <p>Live crowd counting using your webcam</p>
+      </div>
+
+      {error && <div className="error-message">{error}</div>}
+
+      <div className="webcam-container">
+        <div className="video-wrapper">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="webcam-video"
+          />
+          <canvas ref={canvasRef} style={{ display: "none" }} />
+
+          {/* Trajectory overlay (Phase 1: Trajectory Visualization) */}
+          <TrajectoryCanvas
+            sourceRef={videoRef}
+            results={results}
+            enableTracking={enableTracking}
+          />
+
+          {/* Debug Panel for Trajectory */}
+          {enableTracking && isStreaming && (
+            <div
+              style={{
+                position: "absolute",
+                top: "10px",
+                right: "10px",
+                background: "rgba(0, 0, 0, 0.8)",
+                color: "#fff",
+                padding: "10px",
+                borderRadius: "8px",
+                fontSize: "12px",
+                fontFamily: "monospace",
+                zIndex: 100,
+                maxWidth: "250px",
+              }}
+            >
+              <div
+                style={{
+                  fontWeight: "bold",
+                  marginBottom: "5px",
+                  color: "#4caf50",
+                }}
+              >
+                🎯 Tracking Debug
+              </div>
+              <div>Enabled: {enableTracking ? "✅" : "❌"}</div>
+              <div>Has Results: {results ? "✅" : "❌"}</div>
+              <div>Has Tracks: {results?.tracks ? "✅" : "❌"}</div>
+              <div>Track Count: {results?.tracks?.length || 0}</div>
+              <div>Unique Count: {results?.unique_count || 0}</div>
+              {results?.tracks && results.tracks.length > 0 && (
+                <div
+                  style={{
+                    marginTop: "5px",
+                    borderTop: "1px solid #444",
+                    paddingTop: "5px",
+                  }}
+                >
+                  <div style={{ fontSize: "11px", opacity: 0.8 }}>
+                    First Track: #{results.tracks[0].id}
+                  </div>
+                  <div style={{ fontSize: "11px", opacity: 0.8 }}>
+                    State:{" "}
+                    {results.tracks[0].state === 0
+                      ? "NEW"
+                      : results.tracks[0].state === 1
+                      ? "TRACKED"
+                      : "LOST"}
+                  </div>
+                  <div style={{ fontSize: "11px", opacity: 0.8 }}>
+                    Traj Points: {results.tracks[0].trajectory?.length || 0}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Count overlay using CountDisplay component */}
+          {isStreaming && (
+            <CountDisplay
+              results={results}
+              enableTracking={enableTracking}
+              displayMode="overlay"
+              fps={fps}
+              currentModel={currentAutoModel}
+              autoSwitch={autoSwitch}
+            />
+          )}
+
+          {!isStreaming && (
+            <div className="video-placeholder">
+              <div className="placeholder-content">
+                <div className="camera-icon">📹</div>
+                <p>Click "Start" to begin webcam streaming</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Heatmap/Annotated Image Display using HeatmapOverlay component */}
+        {isStreaming && (
+          <HeatmapOverlay
+            heatmapImage={heatmapImage}
+            enableHeatmap={enableHeatmap}
+            modelType={selectedModel}
+            displayMode="standalone"
+          />
+        )}
+
+        <div className="webcam-controls">
+          <div className="model-selector">
+            <label htmlFor="model-select">Model:</label>
+            <select
+              id="model-select"
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              disabled={isStreaming || autoSwitch}
+              className="model-dropdown"
+            >
+              {/* YOLO Models */}
+              <optgroup label="YOLO (Object Detection)">
+                <option value="yolo">YOLO v8 (Default)</option>
+                <option value="yolo-nano">🚀 YOLOv8 Nano (Fastest)</option>
+                <option value="yolo-small">⚡ YOLOv8 Small</option>
+                <option value="yolo-medium">⚙️ YOLOv8 Medium</option>
+                <option value="yolo-large">🎯 YOLOv8 Large</option>
+                <option value="yolo-xlarge">🔴 YOLOv8 XLarge (Best)</option>
+              </optgroup>
+
+              {/* Density Estimation Models */}
+              <optgroup label="Density Estimation">
+                <option value="csrnet">CSRNet (Fast)</option>
+                <option value="tmtb">TMTB/VMamba (Accurate)</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <div className="auto-switch-toggle">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={autoSwitch}
+                onChange={(e) => {
+                  setAutoSwitch(e.target.checked);
+                  if (e.target.checked) {
+                    // Initialize with YOLO when enabling auto-switch
+                    setCurrentAutoModel("yolo-nano");
+                  }
+                }}
+                disabled={isStreaming}
+              />
+              🔄 Auto-Switch Mode (YOLO ↔ CSRNet)
+            </label>
+            {autoSwitch && (
+              <div className="threshold-input">
+                <label htmlFor="threshold">Threshold:</label>
+                <input
+                  type="number"
+                  id="threshold"
+                  value={autoSwitchThreshold}
+                  onChange={(e) =>
+                    setAutoSwitchThreshold(parseInt(e.target.value) || 30)
+                  }
+                  disabled={isStreaming}
+                  min="1"
+                  max="100"
+                  className="threshold-number"
+                />
+                <span className="threshold-hint">people</span>
+              </div>
+            )}
+          </div>
+
+          <div className="tracking-toggle">
+            <label>
+              <input
+                type="checkbox"
+                checked={enableTracking}
+                onChange={(e) => setEnableTracking(e.target.checked)}
+                disabled={!autoSwitch && !selectedModel.startsWith("yolo")}
+              />
+              Enable Tracking (YOLO only)
+            </label>
+            {enableTracking && !results?.tracks && isStreaming && (
+              <span
+                className="tracking-hint"
+                style={{
+                  color: "#ff9800",
+                  fontSize: "0.85rem",
+                  display: "block",
+                  marginTop: "0.25rem",
+                }}
+              >
+                ⏳ Waiting for tracking data...
+              </span>
+            )}
+            {enableTracking && results?.tracks && results.tracks.length > 0 && (
+              <span
+                className="tracking-hint"
+                style={{
+                  color: "#4caf50",
+                  fontSize: "0.85rem",
+                  display: "block",
+                  marginTop: "0.25rem",
+                }}
+              >
+                ✅ {results.tracks.length} tracks active
+              </span>
+            )}
+          </div>
+
+          <div className="heatmap-toggle">
+            <label>
+              <input
+                type="checkbox"
+                checked={enableHeatmap}
+                onChange={(e) => setEnableHeatmap(e.target.checked)}
+                disabled={isStreaming}
+              />
+              Show Detection Overlay
+            </label>
+          </div>
+
+          {!isStreaming ? (
+            <button onClick={handleStartStreaming} className="btn btn-start">
+              🎬 Start Streaming
+            </button>
+          ) : (
+            <button onClick={handleStopStreaming} className="btn btn-stop">
+              ⏹️ Stop Streaming
+            </button>
+          )}
+        </div>
+      </div>
+
+      {isStreaming && results && (
+        <div className="results-panel">
+          <div className="result-card">
+            <h3>📊 Live Results</h3>
+
+            <div className="result-grid">
+              <div className="result-item">
+                <span className="result-label">Detected Count:</span>
+                <span className="result-value large">{results.count}</span>
+              </div>
+
+              {enableTracking && (
+                <div className="result-item">
+                  <span className="result-label">Unique Tracks:</span>
+                  <span className="result-value large">{uniqueCount}</span>
+                </div>
+              )}
+
+              <div className="result-item">
+                <span className="result-label">Frames Processed:</span>
+                <span className="result-value">{frameCount}</span>
+              </div>
+
+              <div className="result-item">
+                <span className="result-label">Processing FPS:</span>
+                <span className="result-value">{fps.toFixed(2)}</span>
+              </div>
+
+              {results.timing && (
+                <>
+                  <div className="result-item">
+                    <span className="result-label">Inference Time:</span>
+                    <span className="result-value">
+                      {results.timing.inference_ms.toFixed(1)} ms
+                    </span>
+                  </div>
+
+                  <div className="result-item">
+                    <span className="result-label">Total Time:</span>
+                    <span className="result-value">
+                      {results.timing.total_ms.toFixed(1)} ms
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {results.reasoning && (
+              <div className="reasoning-section">
+                <h4>🧠 Model Reasoning:</h4>
+                <p>{results.reasoning}</p>
+              </div>
+            )}
+
+            {results.boxes && results.boxes.length > 0 && (
+              <div className="stats-section">
+                <h4>📦 Detection Boxes:</h4>
+                <div className="stats-grid">
+                  <div className="stat-item">
+                    <span>Total Boxes:</span>
+                    <span>{results.boxes.length}</span>
+                  </div>
+                  {results.confidence_stats && (
+                    <>
+                      <div className="stat-item">
+                        <span>Avg Confidence:</span>
+                        <span>
+                          {(results.confidence_stats.avg * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="stat-item">
+                        <span>Min Confidence:</span>
+                        <span>
+                          {(results.confidence_stats.min * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="stat-item">
+                        <span>Max Confidence:</span>
+                        <span>
+                          {(results.confidence_stats.max * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {results.density_map_stats && (
+              <div className="stats-section">
+                <h4>📈 Density Map Statistics:</h4>
+                <div className="stats-grid">
+                  <div className="stat-item">
+                    <span>Max:</span>
+                    <span>{results.density_map_stats.max.toFixed(4)}</span>
+                  </div>
+                  <div className="stat-item">
+                    <span>Mean:</span>
+                    <span>{results.density_map_stats.mean.toFixed(4)}</span>
+                  </div>
+                  <div className="stat-item">
+                    <span>Sum:</span>
+                    <span>{results.density_map_stats.sum.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {enableTracking && results.speed_stats && (
+              <div className="stats-section">
+                <h4>⚡ Phase 2: Speed Analytics</h4>
+                <div className="stats-grid">
+                  <div className="stat-item">
+                    <span>Avg Speed:</span>
+                    <span>{results.speed_stats.average.toFixed(2)} px/s</span>
+                  </div>
+                  <div className="stat-item">
+                    <span>Max Speed:</span>
+                    <span>{results.speed_stats.max.toFixed(2)} px/s</span>
+                  </div>
+                  <div className="stat-item">
+                    <span>Min Speed:</span>
+                    <span>{results.speed_stats.min.toFixed(2)} px/s</span>
+                  </div>
+                  <div className="stat-item">
+                    <span>Std Dev:</span>
+                    <span>{results.speed_stats.std.toFixed(2)} px/s</span>
+                  </div>
+                </div>
+                <p
+                  style={{ fontSize: "12px", color: "#666", marginTop: "10px" }}
+                >
+                  💡 Color Coding:{" "}
+                  <span style={{ color: "#0055FF" }}>Blue</span> = Slow |{" "}
+                  <span style={{ color: "#FF0000" }}>Red</span> = Fast
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Advanced Crowd Analysis Metrics */}
+      {isStreaming && enableTracking && results?.advanced_metrics && (
+        <AdvancedMetrics
+          densityMetrics={results.advanced_metrics.density_metrics}
+          speedMetrics={results.advanced_metrics.speed_metrics}
+        />
+      )}
+
+      {/* Phase 1: Track History Table */}
+      {isStreaming &&
+        enableTracking &&
+        results &&
+        results.tracks &&
+        results.tracks.length > 0 && (
+          <div className="tracking-details">
+            <h3>📊 Active Tracks</h3>
+            <div className="track-history-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Track ID</th>
+                    <th>Frames Tracked</th>
+                    <th>State</th>
+                    <th>Position (X, Y)</th>
+                    <th>Speed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {results.tracks.map((track) => {
+                    const stateNames = { 0: "NEW", 1: "TRACKED", 2: "LOST" };
+                    const stateClasses = {
+                      0: "state-new",
+                      1: "state-tracked",
+                      2: "state-lost",
+                    };
+                    const stateName = stateNames[track.state] || "UNKNOWN";
+                    const stateClass = stateClasses[track.state] || "";
+
+                    return (
+                      <tr key={track.id}>
+                        <td className="track-id">#{track.id}</td>
+                        <td>{track.frames_tracked || 0}</td>
+                        <td>
+                          <span className={`track-state ${stateClass}`}>
+                            {stateName}
+                          </span>
+                        </td>
+                        <td>
+                          ({track.position[0].toFixed(0)},{" "}
+                          {track.position[1].toFixed(0)})
+                        </td>
+                        <td>
+                          {track.speed ? track.speed.toFixed(2) : "0.00"} px/s
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="tracking-legend">
+              <span className="legend-item">
+                <span
+                  className="color-box"
+                  style={{ backgroundColor: "#ff0000" }}
+                ></span>
+                <strong>NEW</strong> - Recently detected
+              </span>
+              <span className="legend-item">
+                <span
+                  className="color-box"
+                  style={{ backgroundColor: "#00ff00" }}
+                ></span>
+                <strong>TRACKED</strong> - Actively tracked
+              </span>
+              <span className="legend-item">
+                <span
+                  className="color-box"
+                  style={{ backgroundColor: "#ffff00" }}
+                ></span>
+                <strong>LOST</strong> - Temporarily lost
+              </span>
+            </p>
+          </div>
+        )}
+
+      <div className="webcam-info">
+        <h3>ℹ️ How it works</h3>
+        <ol>
+          <li>Click "Start Streaming" to activate your webcam</li>
+          <li>Frames are captured and sent to the server for processing</li>
+          <li>The VMamba-TMTB model analyzes each frame in real-time</li>
+          <li>Crowd count is displayed with performance metrics</li>
+          <li>Click "Stop Streaming" when done</li>
+        </ol>
+
+        <div className="tips">
+          <h4>💡 Tips for best results:</h4>
+          <ul>
+            <li>Ensure good lighting conditions</li>
+            <li>Position camera to capture the full area of interest</li>
+            <li>Keep camera stable for consistent results</li>
+            <li>Processing speed depends on your hardware (GPU recommended)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default WebcamCounter;

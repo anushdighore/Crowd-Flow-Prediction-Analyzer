@@ -1,0 +1,194 @@
+/* Page Layout Styles - Used by all main pages */
+
+/* Generic Page Container */
+.page-container,
+.webcam-page,
+.image-page,
+.video-page,
+.external-camera-page,
+.hls-page,
+.pedestrian-page {
+  width: 100%;
+  height: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Main Content Area */
+.page-main,
+.webcam-main,
+.image-main,
+.video-main,
+.external-camera-main,
+.hls-main,
+.pedestrian-main {
+  flex: 1;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* Grid Layout for pages with sidebar */
+.page-grid,
+.counter-grid,
+.webcam-counter-grid {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 0;
+  height: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* Visualization Section */
+.page-content,
+.visualization-grid,
+.content-area {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  padding: 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 1rem;
+}
+
+/* Generic Card */
+.viz-card,
+.card,
+.content-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
+  color: var(--text-primary);
+}
+
+.viz-card:hover,
+.card:hover,
+.content-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-secondary);
+}
+
+/* Card Header */
+.card-header,
+.viz-card-header {
+  padding: 1rem;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-header h3,
+.viz-card-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+/* Card Content */
+.card-content,
+.viz-card-content {
+  flex: 1;
+  padding: 1rem;
+  overflow: auto;
+  background: var(--bg-secondary);
+}
+
+/* Card Footer */
+.card-footer,
+.viz-card-footer {
+  padding: 0.75rem 1rem;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* Not Authenticated */
+.not-authenticated {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    135deg,
+    var(--accent-primary) 0%,
+    var(--accent-secondary) 100%
+  );
+  color: white;
+  text-align: center;
+}
+
+.not-authenticated p {
+  font-size: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.not-authenticated button {
+  background: white;
+  color: var(--accent-primary);
+  border: none;
+  padding: 0.75rem 2rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.not-authenticated button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .page-grid,
+  .counter-grid,
+  .webcam-counter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .page-content,
+  .visualization-grid,
+  .content-area {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .page-content,
+  .visualization-grid,
+  .content-area {
+    grid-template-columns: 1fr;
+    padding: 0.75rem;
+    gap: 0.75rem;
+  }
+
+  .card-header,
+  .card-content,
+  .card-footer {
+    padding: 0.75rem;
+  }
+}

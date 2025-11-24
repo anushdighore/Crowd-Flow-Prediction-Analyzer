@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import CameraSelector from "../components/CameraSelector";
 import CameraStream from "../components/CameraStream";
-import "./CameraPage.css";
+import "../styles/CameraPage.css";
 
 const CameraPage = () => {
   const [selectedCamera, setSelectedCamera] = useState(null);

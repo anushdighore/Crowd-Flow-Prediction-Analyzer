@@ -1,0 +1,249 @@
+/**
+ * CSRNetCard.css - Styling for modular CSRNet Card component
+ */
+
+.csrnet-card-container {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+/* Results Section */
+.csrnet-results-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.results-header {
+  border-bottom: 2px solid #667eea;
+  padding-bottom: 0.75rem;
+}
+
+.results-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #155724;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.results-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Count Display */
+.count-display {
+  text-align: center;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+  border-radius: 8px;
+  border: 2px solid #28a745;
+}
+
+.count-number {
+  font-size: 3rem;
+  font-weight: 700;
+  color: #155724;
+  margin: 0.5rem 0;
+}
+
+.count-label-text {
+  font-size: 1rem;
+  color: #155724;
+  font-weight: 500;
+}
+
+/* Results Details */
+.results-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-left: 3px solid #667eea;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 0.9rem;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-label {
+  font-weight: 600;
+  color: #374151;
+}
+
+.detail-value {
+  color: #667eea;
+  font-family: "Monaco", "Courier New", monospace;
+  font-size: 0.85rem;
+}
+
+/* JSON Details */
+.json-details {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #f9f9f9;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.json-summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: #667eea;
+  user-select: none;
+  padding: 0.5rem 0;
+  transition: color 0.2s ease;
+}
+
+.json-summary:hover {
+  color: #764ba2;
+}
+
+.json-content {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+  font-size: 0.75rem;
+  overflow-x: auto;
+  max-height: 300px;
+  overflow-y: auto;
+  font-family: "Monaco", "Courier New", monospace;
+  color: #374151;
+}
+
+/* Clear Button */
+.csrnet-clear-btn {
+  padding: 0.75rem 1.5rem;
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.csrnet-clear-btn:hover {
+  background: #5a6268;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.csrnet-clear-btn:active {
+  transform: translateY(0);
+}
+
+/* Loading State */
+.csrnet-loading-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem;
+  gap: 1rem;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e5e7eb;
+  border-top: 4px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  font-size: 0.95rem;
+  color: #667eea;
+  font-weight: 500;
+  margin: 0;
+}
+
+/* Error State */
+.csrnet-error-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+  background: #f8d7da;
+  border: 2px solid #f5c6cb;
+  border-radius: 8px;
+  gap: 0.75rem;
+}
+
+.error-icon {
+  font-size: 2rem;
+  margin: 0;
+}
+
+.error-message {
+  color: #721c24;
+  font-size: 0.95rem;
+  margin: 0;
+  text-align: center;
+  font-weight: 500;
+}
+
+/* Heatmap Section */
+.csrnet-heatmap-section {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 2px solid #e5e7eb;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .csrnet-card-container {
+    padding: 1rem;
+  }
+
+  .count-number {
+    font-size: 2.5rem;
+  }
+
+  .results-title {
+    font-size: 1.1rem;
+  }
+
+  .detail-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  .json-content {
+    font-size: 0.7rem;
+    max-height: 250px;
+  }
+}
