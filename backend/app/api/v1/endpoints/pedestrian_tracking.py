@@ -57,6 +57,7 @@ async def process_video_upload(
         temp_dir = tempfile.mkdtemp(prefix="ped_track_")
         video_input = os.path.join(temp_dir, file.filename)
         video_output = os.path.join(temp_dir, "processed.mp4")
+        trajectory_output = os.path.join(temp_dir, "trajectories.csv")
         
         # Save uploaded file
         with open(video_input, "wb") as buffer:
@@ -85,6 +86,7 @@ async def process_video_upload(
             'temp_dir': temp_dir,
             'input_file': video_input,
             'output_file': video_output,
+            'trajectory_file': trajectory_output,
             'progress': 0,
             'error': None
         }
@@ -97,7 +99,8 @@ async def process_video_upload(
             video_input,
             video_output,
             homography_data,
-            frame_skip
+            frame_skip,
+            trajectory_output
         )
         
         return {
@@ -117,17 +120,25 @@ async def _process_video_background(
     input_path: str,
     output_path: str,
     homography_data: Optional[dict],
-    frame_skip: int
+    frame_skip: int,
+    trajectory_output: str
 ):
     """Background task for video processing"""
     try:
         logger.info(f"🎬 Starting video processing for job {job_id}")
         
+        def _update_progress(percent: int):
+            job = active_jobs.get(job_id)
+            if job and job.get('status') == 'processing':
+                job['progress'] = percent
+        
         result = pipeline.process_video(
             input_path,
             output_path,
             homography_data=homography_data,
-            frame_skip=frame_skip
+            frame_skip=frame_skip,
+            progress_callback=_update_progress,
+            trajectory_output_path=trajectory_output
         )
         
         # Get trajectories

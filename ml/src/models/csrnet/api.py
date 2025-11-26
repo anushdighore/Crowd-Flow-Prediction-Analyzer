@@ -13,8 +13,10 @@ from .csrnet import load_csrnet
 # Import config loader with fallback for different import contexts
 try:
     from ...core.config_loader import load_csrnet_config
+    from ...core.device_manager import get_device_manager
 except (ImportError, ValueError):
     from core.config_loader import load_csrnet_config
+    from core.device_manager import get_device_manager
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +47,12 @@ def get_model(checkpoint_path: str = None):
         checkpoint_path = str(Path(__file__).parent.parent.parent.parent / "checkpoints" / "csrnet.pth")
     if checkpoint_path in _model_cache:
         return _model_cache[checkpoint_path]
-    # Force CPU to avoid CUDA errors - CSRNet model is lightweight enough for CPU
-    device = torch.device('cpu')
+    # Use DeviceManager for intelligent device selection with fallback
+    try:
+        device_manager = get_device_manager()
+        device = torch.device(device_manager.current_device)
+    except Exception:
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logger.info(f"🖥️  Using device: {device}")
     model = load_csrnet(checkpoint_path, device=str(device))
     _model_cache[checkpoint_path] = model

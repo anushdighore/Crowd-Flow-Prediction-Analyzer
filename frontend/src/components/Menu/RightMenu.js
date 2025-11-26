@@ -1,23 +1,47 @@
 import React, { useState } from "react";
 import { Switch, FormControlLabel } from "@mui/material";
+import { useLocation } from "react-router-dom";
+import { useWebcam } from "../../context/WebcamContext";
+import { useExternalCamera } from "../../context/ExternalCameraContext";
 
-function RightMenu({
-  isOpen = true,
-  onToggle,
-  selectedModel = "CSRNet",
-  onModelChange,
-  settings = {},
-  onSettingsChange,
-  isStreaming = false,
-  onStreamToggle,
-  enableTracking = false,
-  onTrackingChange,
-  enableHeatmap = false,
-  onHeatmapChange,
-  detectionThreshold = 0.5,
-  onThresholdChange,
-}) {
+function RightMenu({ isOpen = true, onToggle }) {
   const [localOpen, setLocalOpen] = useState(isOpen);
+  const location = useLocation();
+
+  // Detect current page
+  const isWebcamPage = location.pathname === "/webcam";
+  const isExternalCameraPage =
+    location.pathname === "/external-camera" || location.pathname === "/main";
+  const isTemplatePage = location.pathname === "/template";
+
+  // Get webcam context
+  const webcamContext = useWebcam();
+
+  // Get external camera context
+  const externalCameraContext = useExternalCamera();
+
+  // Use the appropriate context based on current page
+  // Template page uses webcam context by default (user can switch in-page)
+  const activeContext = isExternalCameraPage
+    ? externalCameraContext
+    : webcamContext;
+
+  const {
+    isStreaming,
+    selectedModel,
+    enableTracking,
+    enableHeatmap,
+    detectionThreshold,
+    settings,
+    setSelectedModel,
+    setEnableTracking,
+    setEnableHeatmap,
+    setDetectionThreshold,
+    setSettings,
+    handleStartStreaming,
+    handleStopStreaming,
+    sendOccupancyConfig,
+  } = activeContext;
 
   const handleToggle = () => {
     setLocalOpen(!localOpen);
@@ -25,20 +49,41 @@ function RightMenu({
   };
 
   const handleModelSelect = (modelId) => {
-    if (onModelChange) {
-      onModelChange(modelId);
-    }
+    console.log(" Model selected:", modelId);
+    console.log("🎯 Model selected:", modelId);
+    setSelectedModel(modelId);
   };
 
   const handleSettingChange = (key, value) => {
-    if (onSettingsChange) {
-      onSettingsChange({ ...settings, [key]: value });
-    }
+    setSettings({ ...settings, [key]: value });
+  };
+
+  // Occupancy settings state
+  const [occupancySettings, setOccupancySettings] = useState({
+    maxCapacity: 100,
+    alertThreshold: 80,
+    resetThreshold: 78,
+    windowSize: 3,
+  });
+
+  const handleOccupancySettingChange = (key, value) => {
+    const newSettings = { ...occupancySettings, [key]: value };
+    setOccupancySettings(newSettings);
+
+    // Send updated configuration to backend via WebSocket
+    sendOccupancyConfig({
+      max_capacity: newSettings.maxCapacity,
+      alert_threshold: newSettings.alertThreshold,
+      reset_threshold: newSettings.resetThreshold,
+      window_size: newSettings.windowSize,
+    });
   };
 
   const handleStreamToggle = () => {
-    if (onStreamToggle) {
-      onStreamToggle(!isStreaming);
+    if (isStreaming) {
+      handleStopStreaming();
+    } else {
+      handleStartStreaming();
     }
   };
 
@@ -111,39 +156,85 @@ function RightMenu({
       {/* Sidebar Content */}
       {localOpen && (
         <>
-          {/* Stream Control Toggle Button */}
-          <button
-            onClick={handleStreamToggle}
-            style={{
-              width: "100%",
-              marginBottom: "1.5rem",
-              padding: "0.75rem 1rem",
-              background: isStreaming
-                ? "linear-gradient(135deg, #f87171 0%, #dc2626 100%)"
-                : "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-              border: "2px solid rgba(255,255,255,0.3)",
-              color: "white",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontSize: "0.95rem",
-              fontWeight: "600",
-              transition: "all 0.3s ease",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.border = "2px solid rgba(255,255,255,0.6)";
-              e.target.style.transform = "translateY(-2px)";
-              e.target.style.boxShadow = "0 4px 12px rgba(0,0,0,0.3)";
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.border = "2px solid rgba(255,255,255,0.3)";
-              e.target.style.transform = "translateY(0)";
-              e.target.style.boxShadow = "none";
-            }}
-          >
-            {isStreaming ? "⏹️ Stop Streaming" : "🎬 Start Streaming"}
-          </button>
+          {/* WebCam/External Camera/Template Page: Start/Stop Stream Button */}
+          {(isWebcamPage || isExternalCameraPage || isTemplatePage) && (
+            <button
+              onClick={handleStreamToggle}
+              style={{
+                width: "100%",
+                marginBottom: "1.5rem",
+                padding: "0.75rem 1rem",
+                background: isStreaming
+                  ? "linear-gradient(135deg, #f87171 0%, #dc2626 100%)"
+                  : "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                border: "2px solid rgba(255,255,255,0.3)",
+                color: "white",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.95rem",
+                fontWeight: "600",
+                transition: "all 0.3s ease",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.border = "2px solid rgba(255,255,255,0.6)";
+                e.target.style.transform = "translateY(-2px)";
+                e.target.style.boxShadow = "0 4px 12px rgba(0,0,0,0.3)";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.border = "2px solid rgba(255,255,255,0.3)";
+                e.target.style.transform = "translateY(0)";
+                e.target.style.boxShadow = "none";
+              }}
+            >
+              {isStreaming
+                ? isExternalCameraPage
+                  ? "⏹️ Stop Stream"
+                  : "⏹️ Stop WebCam"
+                : isExternalCameraPage
+                ? "📡 Start Stream"
+                : isTemplatePage
+                ? "🎬 Start Stream"
+                : "📹 Start WebCam"}
+            </button>
+          )}
+
+          {/* Other Pages (not webcam, external camera, or template): Generic Start Button */}
+          {!isWebcamPage && !isExternalCameraPage && !isTemplatePage && (
+            <button
+              onClick={handleStreamToggle}
+              style={{
+                width: "100%",
+                marginBottom: "1.5rem",
+                padding: "0.75rem 1rem",
+                background: isStreaming
+                  ? "linear-gradient(135deg, #f87171 0%, #dc2626 100%)"
+                  : "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                border: "2px solid rgba(255,255,255,0.3)",
+                color: "white",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.95rem",
+                fontWeight: "600",
+                transition: "all 0.3s ease",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.border = "2px solid rgba(255,255,255,0.6)";
+                e.target.style.transform = "translateY(-2px)";
+                e.target.style.boxShadow = "0 4px 12px rgba(0,0,0,0.3)";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.border = "2px solid rgba(255,255,255,0.3)";
+                e.target.style.transform = "translateY(0)";
+                e.target.style.boxShadow = "none";
+              }}
+            >
+              {isStreaming ? "⏹️ Stop Streaming" : "🎬 Start Streaming"}
+            </button>
+          )}
 
           {/* Model Selection */}
           <div style={{ marginBottom: "1.5rem" }}>
@@ -289,11 +380,7 @@ function RightMenu({
                   control={
                     <Switch
                       checked={enableTracking || false}
-                      onChange={(e) => {
-                        if (onTrackingChange) {
-                          onTrackingChange(e.target.checked);
-                        }
-                      }}
+                      onChange={(e) => setEnableTracking(e.target.checked)}
                       size="small"
                       sx={{
                         color: "rgba(255,255,255,0.5)",
@@ -315,11 +402,7 @@ function RightMenu({
                   control={
                     <Switch
                       checked={enableHeatmap || false}
-                      onChange={(e) => {
-                        if (onHeatmapChange) {
-                          onHeatmapChange(e.target.checked);
-                        }
-                      }}
+                      onChange={(e) => setEnableHeatmap(e.target.checked)}
                       size="small"
                       sx={{
                         color: "rgba(255,255,255,0.5)",
@@ -356,11 +439,9 @@ function RightMenu({
                   max="0.95"
                   step="0.05"
                   value={detectionThreshold}
-                  onChange={(e) => {
-                    if (onThresholdChange) {
-                      onThresholdChange(parseFloat(e.target.value));
-                    }
-                  }}
+                  onChange={(e) =>
+                    setDetectionThreshold(parseFloat(e.target.value))
+                  }
                   style={{
                     width: "100%",
                     cursor: "pointer",
@@ -394,10 +475,8 @@ function RightMenu({
               <FormControlLabel
                 control={
                   <Switch
-                    checked={settings.heatmap || false}
-                    onChange={(e) =>
-                      handleSettingChange("heatmap", e.target.checked)
-                    }
+                    checked={enableHeatmap || false}
+                    onChange={(e) => setEnableHeatmap(e.target.checked)}
                     size="small"
                     sx={{
                       color: "rgba(255,255,255,0.5)",
@@ -462,6 +541,168 @@ function RightMenu({
                   margin: 0,
                 }}
               />
+            </div>
+          </div>
+
+          {/* Occupancy Settings */}
+          <div style={{ marginBottom: "1.5rem" }}>
+            <h4
+              style={{
+                margin: "0 0 0.75rem",
+                fontSize: "0.95rem",
+                textTransform: "uppercase",
+                opacity: 0.9,
+                letterSpacing: "0.05em",
+              }}
+            >
+              📊 Occupancy Settings
+            </h4>
+
+            {/* Max Capacity Input */}
+            <div style={{ marginBottom: "1rem" }}>
+              <label
+                htmlFor="max-capacity"
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  fontSize: "0.9rem",
+                  fontWeight: "600",
+                }}
+              >
+                Max Capacity
+              </label>
+              <input
+                id="max-capacity"
+                type="number"
+                placeholder="100"
+                min="1"
+                max="10000"
+                value={occupancySettings.maxCapacity}
+                onChange={(e) =>
+                  handleOccupancySettingChange(
+                    "maxCapacity",
+                    parseInt(e.target.value) || 100
+                  )
+                }
+                style={{
+                  width: "100%",
+                  padding: "0.5rem",
+                  borderRadius: "4px",
+                  border: "none",
+                  fontSize: "0.85rem",
+                  backgroundColor: "rgba(0,0,0,0.2)",
+                  color: "white",
+                }}
+              />
+            </div>
+
+            {/* Alert Threshold Slider */}
+            <div style={{ marginBottom: "1rem" }}>
+              <label
+                htmlFor="alert-threshold"
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  fontSize: "0.9rem",
+                  fontWeight: "600",
+                }}
+              >
+                Alert Threshold: {occupancySettings.alertThreshold}%
+              </label>
+              <input
+                id="alert-threshold"
+                type="range"
+                min="50"
+                max="100"
+                value={occupancySettings.alertThreshold}
+                onChange={(e) =>
+                  handleOccupancySettingChange(
+                    "alertThreshold",
+                    parseInt(e.target.value)
+                  )
+                }
+                style={{
+                  width: "100%",
+                  height: "6px",
+                  borderRadius: "3px",
+                  backgroundColor: "rgba(255,255,255,0.3)",
+                  outline: "none",
+                }}
+              />
+            </div>
+
+            {/* Reset Threshold Slider */}
+            <div style={{ marginBottom: "1rem" }}>
+              <label
+                htmlFor="reset-threshold"
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  fontSize: "0.9rem",
+                  fontWeight: "600",
+                }}
+              >
+                Reset Threshold: {occupancySettings.resetThreshold}%
+              </label>
+              <input
+                id="reset-threshold"
+                type="range"
+                min="40"
+                max="95"
+                value={occupancySettings.resetThreshold}
+                onChange={(e) =>
+                  handleOccupancySettingChange(
+                    "resetThreshold",
+                    parseInt(e.target.value)
+                  )
+                }
+                style={{
+                  width: "100%",
+                  height: "6px",
+                  borderRadius: "3px",
+                  backgroundColor: "rgba(255,255,255,0.3)",
+                  outline: "none",
+                }}
+              />
+            </div>
+
+            {/* Window Size Selector */}
+            <div style={{ marginBottom: "1rem" }}>
+              <label
+                htmlFor="window-size"
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  fontSize: "0.9rem",
+                  fontWeight: "600",
+                }}
+              >
+                Sliding Window
+              </label>
+              <select
+                id="window-size"
+                value={occupancySettings.windowSize}
+                onChange={(e) =>
+                  handleOccupancySettingChange(
+                    "windowSize",
+                    parseInt(e.target.value)
+                  )
+                }
+                style={{
+                  width: "100%",
+                  padding: "0.5rem",
+                  borderRadius: "4px",
+                  border: "none",
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                  backgroundColor: "rgba(0,0,0,0.2)",
+                  color: "white",
+                }}
+              >
+                <option value="3">3 seconds</option>
+                <option value="4">4 seconds</option>
+                <option value="5">5 seconds</option>
+              </select>
             </div>
           </div>
 

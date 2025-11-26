@@ -181,6 +181,9 @@ class PedestrianTracker:
             else:
                 result['annotated_frame'] = resized_frame
             
+            # Provide a normalized processed frame alias for downstream pipelines
+            result['processed_frame'] = result.get('annotated_frame', resized_frame)
+            
             return result
             
         except Exception as e:
@@ -220,11 +223,21 @@ class PedestrianTracker:
             trajectory_data = []
             for person_id, positions in self.tracker.track_history.items():
                 for frame_idx, pos in enumerate(positions):
+                    x_val: float
+                    y_val: float
+                    if isinstance(pos, (tuple, list)) and len(pos) >= 2:
+                        x_val, y_val = float(pos[0]), float(pos[1])
+                    elif hasattr(pos, "__len__") and len(pos) >= 2:  # numpy arrays
+                        x_val, y_val = float(pos[0]), float(pos[1])
+                    else:
+                        x_val = float(pos)
+                        y_val = 0.0
+                    
                     trajectory_data.append({
                         'id': person_id,
                         'frame': frame_idx,
-                        'x': pos[0] if isinstance(pos, tuple) else pos,
-                        'y': pos[1] if isinstance(pos, tuple) else 0,
+                        'x': x_val,
+                        'y': y_val,
                     })
             
             if not trajectory_data:
@@ -286,7 +299,9 @@ class PedestrianTrackingPipeline:
         video_path: str,
         output_path: str,
         homography_data: Optional[Dict[str, Any]] = None,
-        frame_skip: int = 1
+        frame_skip: int = 1,
+        progress_callback: Optional[Any] = None,
+        trajectory_output_path: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Process entire video file
@@ -296,6 +311,8 @@ class PedestrianTrackingPipeline:
             output_path: Path to save processed video
             homography_data: Optional dict with 'image_points' and 'world_points'
             frame_skip: Process every Nth frame
+            progress_callback: Optional callable receiving progress percent (0-100)
+            trajectory_output_path: Optional CSV path for trajectories
         
         Returns:
             Dict with processing results
@@ -328,21 +345,27 @@ class PedestrianTrackingPipeline:
             self.frames_processed = 0
             frame_number = 0
             
+            effective_skip = max(1, int(frame_skip) if frame_skip else 1)
+            
             # Process frames
             while True:
                 ret, frame = cap.read()
                 if not ret:
                     break
                 
-                if frame_number % frame_skip == 0:
+                if frame_number % effective_skip == 0:
                     result = self.tracker.process_frame(frame, frame_number)
-                    if 'processed_frame' in result:
-                        processed = result['processed_frame']
-                        # Ensure frame is correct size
-                        if processed.shape[:2] != (height, width):
-                            processed = cv2.resize(processed, (width, height))
-                        self.video_writer.write(processed)
-                        self.frames_processed += 1
+                    processed = result.get('processed_frame') or result.get('annotated_frame') or frame
+                    
+                    if processed.shape[:2] != (height, width):
+                        processed = cv2.resize(processed, (width, height))
+                    
+                    self.video_writer.write(processed)
+                    self.frames_processed += 1
+                    
+                    if progress_callback and total_frames:
+                        percent = min(99, int(((frame_number + 1) / total_frames) * 100))
+                        progress_callback(percent)
                 
                 frame_number += 1
             
@@ -352,6 +375,8 @@ class PedestrianTrackingPipeline:
             
             # Get trajectory data
             traj_df = self.tracker.get_trajectory_dataframe()
+            if trajectory_output_path and traj_df is not None:
+                traj_df.to_csv(trajectory_output_path, index=False)
             metrics = self.tracker.get_metrics()
             
             return {

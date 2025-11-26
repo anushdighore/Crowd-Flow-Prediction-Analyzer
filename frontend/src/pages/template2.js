@@ -4,6 +4,7 @@ import "../styles/Dashboard.css";
 import { useAuth } from "../context/AuthContext";
 import PedestrianTracker from "../components/Trajectory/PedestrianTracker";
 import HLSStreamingPage from "../components/Camera/HLSStreamingPage";
+import Card2 from "../components/Layout/Card2.js";
 
 function Template2() {
   const navigate = useNavigate();
@@ -281,6 +282,81 @@ function Template2() {
                 Multi-column CNN (Coming Soon)
               </p>
             </div>
+          </div>
+        </section>
+
+        {/* Card2 Showcase Section */}
+        <section
+          className="card2-showcase"
+          style={{
+            marginTop: "3rem",
+            padding: "2rem",
+            background: "#fafafa",
+            borderRadius: "12px",
+            margin: "3rem 2rem 2rem 2rem",
+          }}
+        >
+          <h2
+            style={{
+              fontSize: "1.5rem",
+              marginBottom: "1.5rem",
+              color: "#333",
+            }}
+          >
+            Card2 Design Showcase
+          </h2>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              gap: "1.5rem",
+            }}
+          >
+            <Card2
+              icon="🎨"
+              title="Card2 Example 1"
+              description="This is a spanning card with children support"
+              color="#667eea"
+            >
+              <div style={{ fontSize: "0.9rem", color: "#555" }}>
+                <p>This is example content inside Card2</p>
+                <button
+                  style={{
+                    padding: "0.5rem 1rem",
+                    marginTop: "0.5rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  Sample Button
+                </button>
+              </div>
+            </Card2>
+
+            <Card2
+              icon="✨"
+              title="Card2 Example 2"
+              description="Customizable design with colors"
+              color="#764ba2"
+            >
+              <div style={{ fontSize: "0.9rem", color: "#555" }}>
+                <ul style={{ margin: "0", paddingLeft: "1.5rem" }}>
+                  <li>Feature 1</li>
+                  <li>Feature 2</li>
+                  <li>Feature 3</li>
+                </ul>
+              </div>
+            </Card2>
+
+            <Card2
+              icon="🚀"
+              title="Card2 Example 3"
+              description="Perfect for flexible layouts"
+              color="#43e97b"
+            >
+              <div style={{ fontSize: "0.9rem", color: "#555" }}>
+                <p>Any content can go here - text, buttons, forms, etc.</p>
+              </div>
+            </Card2>
           </div>
         </section>
       </main>

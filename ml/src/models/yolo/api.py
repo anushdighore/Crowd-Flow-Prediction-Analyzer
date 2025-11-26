@@ -7,6 +7,15 @@ import logging
 import numpy as np
 import cv2
 
+# Import DeviceManager for consistent device selection
+try:
+    from ..core.device_manager import get_device_manager
+except ImportError:
+    try:
+        from core.device_manager import get_device_manager
+    except ImportError:
+        get_device_manager = None
+
 logger = logging.getLogger(__name__)
 
 _model_cache = {}
@@ -24,7 +33,14 @@ def get_model(checkpoint_path: str = None):
     from .yolov8_counter import YOLOv8Counter
     import torch
     
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # Use DeviceManager for intelligent device selection
+    if get_device_manager is not None:
+        try:
+            device = get_device_manager().current_device
+        except Exception:
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    else:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = YOLOv8Counter(model_path=checkpoint_path, device=device)
     _model_cache[checkpoint_path] = model
     return model

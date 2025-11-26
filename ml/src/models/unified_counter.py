@@ -21,7 +21,7 @@ class UnifiedCounter:
         self,
         model_type: str = 'yolo',
         model_path: Optional[str] = None,
-        device: str = 'cuda',
+        device: str = None,  # None = auto-detect via DeviceManager
         conf_threshold: float = 0.25,
         iou_threshold: float = 0.45,
         enable_tracking: bool = False,
@@ -33,14 +33,27 @@ class UnifiedCounter:
         Args:
             model_type: 'yolo', 'csrnet', or 'mcnn'
             model_path: Path to model weights
-            device: 'cuda' or 'cpu'
+            device: 'cuda' or 'cpu' (None = auto-detect via DeviceManager)
             conf_threshold: Confidence threshold (YOLO only)
             iou_threshold: IOU threshold (YOLO only)
             enable_tracking: Enable Kalman filter tracking
             **kwargs: Additional model-specific parameters
         """
         self.model_type = model_type.lower()
+        # Use DeviceManager for intelligent device selection
+        if device is None:
+            try:
+                if get_device_manager is not None:
+                    device = get_device_manager().current_device
+                    logger.info(f"🖥️ UnifiedCounter using DeviceManager: {device}")
+                else:
+                    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+                    logger.info(f"🖥️ UnifiedCounter using torch check: {device}")
+            except Exception as e:
+                device = 'cuda' if torch.cuda.is_available() else 'cpu'
+                logger.warning(f"⚠️ DeviceManager error, falling back: {e}, using {device}")
         self.device = device
+        logger.info(f"✅ UnifiedCounter initialized with device: {self.device}")
         self.enable_tracking = enable_tracking
         self.model = None
         self.tracker = None
@@ -90,8 +103,12 @@ class UnifiedCounter:
         # Initialize tracker if enabled (only for YOLO)
         if self.enable_tracking and self.model_type == 'yolo':
             from models.tracking import KalmanTracker
-            self.tracker = KalmanTracker()
-            logger.info("Tracking enabled")
+            # Optimized parameters for stable tracking:
+            # - Reduced max_distance for stricter matching (less ID switching)
+            # - Increased max_age for longer persistence (less flickering)
+            # - Increased min_hits for confirmation (less false tracks)
+            self.tracker = KalmanTracker(max_distance=100.0, max_age=8, min_hits=3)
+            logger.info("Tracking enabled with optimized parameters: max_distance=100, max_age=8, min_hits=3")
     
     def predict(
         self,
@@ -110,16 +127,24 @@ class UnifiedCounter:
         Returns:
             Dictionary with prediction results
         """
-        # Base prediction
-        result = self.model.predict(image)
+        # Base prediction (YOLO needs boxes for tracking)
+        if self.model_type == 'yolo':
+            request_boxes = bool(self.tracker is not None or return_details)
+            result = self.model.predict(
+                image,
+                return_boxes=request_boxes
+            )
+        else:
+            result = self.model.predict(image)
         
         # Add tracking if enabled
         if self.tracker is not None:
             boxes = result.get('boxes', [])
+            tracker_boxes = self._prepare_tracker_boxes(boxes)
             
-            if len(boxes) > 0:
-                # Update tracker
-                tracks = self.tracker.update(boxes)
+            if len(tracker_boxes) > 0:
+                # Update tracker using normalized box format
+                tracks = self.tracker.update(tracker_boxes)
                 
                 # Add tracking info to result
                 result['tracks'] = [
@@ -130,7 +155,10 @@ class UnifiedCounter:
                         'state': int(track.state),  # Convert enum to int (0=NEW, 1=TRACKED, 2=LOST)
                         'speed': track.last_speed,  # Phase 2: Add speed
                         'avg_speed': track.get_average_speed(),  # Phase 2: Add average speed
-                        'trajectory': self.tracker.track_history.get(track.id, [])[-30:],  # Last 30 points
+                        'trajectory': [
+                            [float(p[0]), float(p[1])] if isinstance(p, (tuple, list)) else [float(p), 0.0]
+                            for p in self.tracker.track_history.get(track.id, [])[-30:]
+                        ],  # Last 30 points as [x, y] arrays
                         'frames_tracked': track.hits  # Number of frames this track has been detected
                     }
                     for track in tracks
@@ -157,73 +185,247 @@ class UnifiedCounter:
         
         # Generate visualization if requested
         if return_visualization:
+            logger.info(f"🎨 Generating annotated image with {len(result.get('tracks', []))} tracks")
             result['annotated_image'] = self._draw_predictions(image, result)
+            if result.get('annotated_image') is not None:
+                logger.info(f"✅ Annotated image generated: shape={result['annotated_image'].shape}")
+            else:
+                logger.warning("⚠️ _draw_predictions returned None")
         
         return result
     
+    def _get_color_for_id(self, track_id: int) -> Tuple[int, int, int]:
+        """Generate unique BGR color for track ID using golden ratio for even distribution"""
+        hue = (track_id * 137.508) % 360  # Golden angle
+        # Convert HSV to BGR (OpenCV uses BGR)
+        import colorsys
+        r, g, b = colorsys.hsv_to_rgb(hue / 360, 0.85, 0.9)
+        return (int(b * 255), int(g * 255), int(r * 255))
+    
+    def _predict_future_positions(self, track_id: int, num_steps: int = 5) -> List[Tuple[int, int]]:
+        """Predict future positions using Kalman filter velocity"""
+        if track_id not in self.tracker.track_history:
+            return []
+        
+        history = self.tracker.track_history[track_id]
+        if len(history) < 2:
+            return []
+        
+        # Calculate average velocity from recent points
+        recent = history[-min(5, len(history)):]
+        avg_vx, avg_vy = 0, 0
+        for i in range(1, len(recent)):
+            avg_vx += recent[i][0] - recent[i-1][0]
+            avg_vy += recent[i][1] - recent[i-1][1]
+        
+        count = len(recent) - 1
+        if count > 0:
+            avg_vx /= count
+            avg_vy /= count
+        
+        # Only predict if moving
+        speed = np.sqrt(avg_vx**2 + avg_vy**2)
+        if speed < 1.0:
+            return []
+        
+        # Project forward
+        last_pos = history[-1]
+        predictions = []
+        for i in range(1, num_steps + 1):
+            pred_x = int(last_pos[0] + avg_vx * i * 1.5)  # Scale factor for visibility
+            pred_y = int(last_pos[1] + avg_vy * i * 1.5)
+            predictions.append((pred_x, pred_y))
+        
+        return predictions
+    
     def _draw_predictions(self, image: np.ndarray, result: Dict) -> np.ndarray:
-        """Draw predictions on image"""
+        """Draw enhanced predictions on image with bounding boxes, trajectories, and predictions"""
         annotated = image.copy()
+        h, w = annotated.shape[:2]
+        
+        # Visualization toggles
+        draw_bounding_boxes = False  # Set to True to enable bounding boxes
+        draw_trajectories = True
+        draw_predictions = True
         
         if self.model_type == 'yolo':
-            # Draw bounding boxes
-            boxes = result.get('boxes', [])
-            
             if self.tracker is not None and 'tracks' in result:
-                # Draw with track IDs and speed-based colors (Phase 2)
+                # Draw with enhanced styling
                 for track_info in result['tracks']:
                     box = track_info['box']
                     track_id = track_info['id']
+                    speed = track_info.get('speed', 0)
                     
-                    # Phase 2: Use speed-based coloring
-                    track_obj = next((t for t in self.tracker.tracks if t.id == track_id), None)
-                    if track_obj and track_obj.last_speed > 0:
-                        # Color by speed (blue=slow, red=fast)
-                        color = self.tracker.get_speed_color(track_obj.last_speed, max_speed=100.0)
-                    else:
-                        # Fallback to consistent color
-                        color = self.tracker.get_color(track_id)
+                    # Get unique color for this track
+                    color = self._get_color_for_id(track_id)
                     
-                    # Draw box
                     x1, y1, x2, y2 = map(int, box[:4])
-                    cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+                    box_w, box_h = x2 - x1, y2 - y1
                     
-                    # Draw ID and speed
-                    label = f"ID:{track_id}"
-                    if track_obj:
-                        label += f" {track_obj.last_speed:.1f}px/s"
+                    # === Draw Bounding Box with Corner Accents ===
+                    if draw_bounding_boxes:
+                        # Main box (semi-transparent effect via thinner line)
+                        cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+                        
+                        # Corner accents
+                        corner_len = min(20, box_w // 4, box_h // 4)
+                        # Top-left
+                        cv2.line(annotated, (x1, y1), (x1 + corner_len, y1), color, 3)
+                        cv2.line(annotated, (x1, y1), (x1, y1 + corner_len), color, 3)
+                        # Top-right
+                        cv2.line(annotated, (x2, y1), (x2 - corner_len, y1), color, 3)
+                        cv2.line(annotated, (x2, y1), (x2, y1 + corner_len), color, 3)
+                        # Bottom-left
+                        cv2.line(annotated, (x1, y2), (x1 + corner_len, y2), color, 3)
+                        cv2.line(annotated, (x1, y2), (x1, y2 - corner_len), color, 3)
+                        # Bottom-right
+                        cv2.line(annotated, (x2, y2), (x2 - corner_len, y2), color, 3)
+                        cv2.line(annotated, (x2, y2), (x2, y2 - corner_len), color, 3)
+                        
+                        # === Draw ID Label with Background ===
+                        label = f"#{track_id}"
+                        font = cv2.FONT_HERSHEY_SIMPLEX
+                        font_scale = 0.6
+                        thickness = 2
+                        (text_w, text_h), baseline = cv2.getTextSize(label, font, font_scale, thickness)
+                        
+                        # Label background
+                        cv2.rectangle(annotated, (x1, y1 - text_h - 8), (x1 + text_w + 8, y1), color, -1)
+                        cv2.putText(annotated, label, (x1 + 4, y1 - 4), font, font_scale, (255, 255, 255), thickness)
+                        
+                        # === Draw Speed Badge ===
+                        if speed > 0.1:
+                            speed_text = f"{speed:.1f} px/s"
+                            (sw, sh), _ = cv2.getTextSize(speed_text, font, 0.5, 1)
+                            cv2.rectangle(annotated, (x2 - sw - 8, y1 - sh - 8), (x2, y1), (40, 40, 40), -1)
+                            cv2.putText(annotated, speed_text, (x2 - sw - 4, y1 - 4), font, 0.5, color, 1)
                     
-                    cv2.putText(
-                        annotated, label, (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2
-                    )
-                    
-                    # Draw trajectory
-                    if track_id in self.tracker.track_history:
+                    # === Draw Trajectory Path (Gradient Opacity) ===
+                    if draw_trajectories and track_id in self.tracker.track_history:
                         points = self.tracker.track_history[track_id]
-                        for i in range(1, len(points)):
-                            pt1 = tuple(map(int, points[i-1]))
-                            pt2 = tuple(map(int, points[i]))
-                            cv2.line(annotated, pt1, pt2, color, 1)
+                        num_points = len(points)
+                        
+                        # Only draw trajectory if we have at least 3 points (for smoother paths)
+                        if num_points >= 3:
+                            # Apply smoothing to trajectory points
+                            smoothed_points = []
+                            for i in range(num_points):
+                                # Simple moving average smoothing
+                                start_idx = max(0, i - 1)
+                                end_idx = min(num_points, i + 2)
+                                window_points = points[start_idx:end_idx]
+                                
+                                # Average the positions
+                                avg_x = sum(p[0] for p in window_points) / len(window_points)
+                                avg_y = sum(p[1] for p in window_points) / len(window_points)
+                                smoothed_points.append([avg_x, avg_y])
+                            
+                            # Draw smoothed trajectory
+                            for i in range(1, len(smoothed_points)):
+                                # Gradient: older points are more transparent (thinner)
+                                alpha = i / len(smoothed_points)
+                                line_thickness = max(1, int(alpha * 2))  # Thinner lines for cleaner look
+                                
+                                pt1 = tuple(map(int, smoothed_points[i-1]))
+                                pt2 = tuple(map(int, smoothed_points[i]))
+                                cv2.line(annotated, pt1, pt2, color, line_thickness)
+                            
+                            # Draw start marker (small circle) - only if trajectory is established
+                            start_pt = tuple(map(int, smoothed_points[0]))
+                            cv2.circle(annotated, start_pt, 4, color, 1)  # Smaller marker
+                            
+                            # Draw current position marker (filled circle)
+                            end_pt = tuple(map(int, smoothed_points[-1]))
+                            cv2.circle(annotated, end_pt, 6, color, -1)  # Smaller end marker
+                            cv2.circle(annotated, end_pt, 6, (255, 255, 255), 1)  # Thinner border
+                        elif num_points >= 2:
+                            # For short trajectories, draw without smoothing but with minimal styling
+                            for i in range(1, num_points):
+                                pt1 = tuple(map(int, points[i-1][:2]))
+                                pt2 = tuple(map(int, points[i][:2]))
+                                cv2.line(annotated, pt1, pt2, color, 1)  # Thin line
+                        elif num_points == 1:
+                            # Single point - just draw a small indicator (no big circle)
+                            pt = tuple(map(int, points[0][:2]))
+                            cv2.circle(annotated, pt, 4, color, -1)
+                    
+                    # === Draw Predicted Path (Dashed) - only for established tracks ===
+                    if draw_predictions and track_id in self.tracker.track_history:
+                        track_history = self.tracker.track_history[track_id]
+                        # Only draw predictions if track has at least 3 points (enough to establish direction)
+                        if len(track_history) >= 3:
+                            predictions = self._predict_future_positions(track_id, num_steps=5)
+                            if predictions:
+                                # Start from last known position
+                                last_pos = tuple(map(int, track_history[-1][:2]))
+                                
+                                # Draw dashed prediction line
+                                all_pred_points = [last_pos] + predictions
+                                for i in range(1, len(all_pred_points)):
+                                    pt1 = all_pred_points[i-1]
+                                    pt2 = all_pred_points[i]
+                                    
+                                    # Dashed line effect
+                                    dist = np.sqrt((pt2[0]-pt1[0])**2 + (pt2[1]-pt1[1])**2)
+                                    if dist > 0:
+                                        num_dashes = max(2, int(dist / 8))
+                                        for d in range(0, num_dashes, 2):
+                                            t1 = d / num_dashes
+                                            t2 = min((d + 1) / num_dashes, 1.0)
+                                            dash_pt1 = (int(pt1[0] + t1 * (pt2[0] - pt1[0])), 
+                                                       int(pt1[1] + t1 * (pt2[1] - pt1[1])))
+                                            dash_pt2 = (int(pt1[0] + t2 * (pt2[0] - pt1[0])), 
+                                                       int(pt1[1] + t2 * (pt2[1] - pt1[1])))
+                                            # Lighter color for predictions
+                                            pred_color = tuple(min(255, c + 60) for c in color)
+                                            cv2.line(annotated, dash_pt1, dash_pt2, pred_color, 2)
+                                
+                                # Arrow at end of prediction
+                                if len(predictions) >= 2:
+                                    end_pt = predictions[-1]
+                                    prev_pt = predictions[-2]
+                                angle = np.arctan2(end_pt[1] - prev_pt[1], end_pt[0] - prev_pt[0])
+                                arrow_len = 12
+                                
+                                arr_pt1 = (int(end_pt[0] - arrow_len * np.cos(angle - np.pi/6)),
+                                          int(end_pt[1] - arrow_len * np.sin(angle - np.pi/6)))
+                                arr_pt2 = (int(end_pt[0] - arrow_len * np.cos(angle + np.pi/6)),
+                                          int(end_pt[1] - arrow_len * np.sin(angle + np.pi/6)))
+                                
+                                pred_color = tuple(min(255, c + 60) for c in color)
+                                cv2.line(annotated, end_pt, arr_pt1, pred_color, 2)
+                                cv2.line(annotated, end_pt, arr_pt2, pred_color, 2)
+            
             else:
                 # Draw simple boxes without tracking
+                boxes = result.get('boxes', [])
                 for box in boxes:
-                    x1, y1, x2, y2 = map(int, box[:4])
+                    if isinstance(box, dict) and 'bbox' in box:
+                        coords = box['bbox']
+                    else:
+                        coords = box
+                    x1, y1, x2, y2 = map(int, coords[:4])
                     cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
             
-            # Draw counts
-            count_text = f"Count: {result['count']}"
-            cv2.putText(
-                annotated, count_text, (10, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2
-            )
+            # === Draw Stats Overlay ===
+            # Semi-transparent background for stats
+            overlay = annotated.copy()
+            cv2.rectangle(overlay, (5, 5), (200, 90), (0, 0, 0), -1)
+            cv2.addWeighted(overlay, 0.6, annotated, 0.4, 0, annotated)
             
+            # Count
+            count_text = f"Count: {result['count']}"
+            cv2.putText(annotated, count_text, (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            
+            # Unique count
             if 'unique_count' in result:
-                unique_text = f"Unique: {result['unique_count']}"
-                cv2.putText(
-                    annotated, unique_text, (10, 70),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2
-                )
+                unique_text = f"Tracked: {result['unique_count']}"
+                cv2.putText(annotated, unique_text, (15, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            
+            # Average speed
+            if 'speed_stats' in result and result['speed_stats'].get('average', 0) > 0:
+                speed_text = f"Avg Speed: {result['speed_stats']['average']:.1f} px/s"
+                cv2.putText(annotated, speed_text, (15, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 100), 1)
         
         elif self.model_type in ['csrnet', 'mcnn']:
             # Draw density map overlay
@@ -251,6 +453,28 @@ class UnifiedCounter:
             )
         
         return annotated
+
+    def _prepare_tracker_boxes(self, boxes: List) -> List[List[float]]:
+        """Normalize box outputs into [x1, y1, x2, y2] format for the tracker"""
+        formatted_boxes = []
+        for box in boxes or []:
+            coords = None
+            if isinstance(box, dict):
+                if 'bbox' in box and len(box['bbox']) >= 4:
+                    coords = box['bbox'][:4]
+                elif all(k in box for k in ('x1', 'y1', 'x2', 'y2')):
+                    coords = [box['x1'], box['y1'], box['x2'], box['y2']]
+            elif isinstance(box, (list, tuple, np.ndarray)) and len(box) >= 4:
+                coords = box[:4]
+
+            if coords is None:
+                continue
+
+            try:
+                formatted_boxes.append([float(coords[0]), float(coords[1]), float(coords[2]), float(coords[3])])
+            except (TypeError, ValueError):
+                continue
+        return formatted_boxes
     
     def process_video(
         self,

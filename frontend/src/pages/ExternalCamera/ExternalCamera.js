@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import "../../styles/ExternalCameraPage.css";
-import "../../components/Visualization/VisualizationCards.css";
 import { useAuth } from "../../context/AuthContext";
 import CameraControls from "../../components/Camera/CameraControls";
 import SettingsPanel from "../../components/Camera/SettingsPanel";
@@ -10,7 +9,6 @@ import HeatmapDisplay from "../../components/Camera/HeatmapDisplay";
 import StreamStats from "../../components/Camera/StreamStats";
 import TrackingDetails from "../../components/Camera/TrackingDetails";
 import AnalyticsGraphs from "../../components/Camera/AnalyticsGraphs";
-import { SettingsSidebar } from "../../components/Visualization";
 import Card from "../../components/Layout/Card";
 
 const API_BASE = "http://localhost:8000/api";
@@ -302,6 +300,8 @@ function ExternalCameraPage() {
       <main className="external-camera-main">
         <div className="webcam-counter-grid">
           {/* Settings Sidebar - Left Column */}
+          {/* TODO: SettingsSidebar component deleted - using RightMenu instead */}
+          {/*
           <SettingsSidebar
             isStreaming={isStreaming}
             error={error}
@@ -332,30 +332,31 @@ function ExternalCameraPage() {
             frameCount={frameCount}
             sourceType="external"
           >
-            {/* Camera URL Input */}
-            <div className="setting-group">
-              <label>Camera URL</label>
-              <input
-                type="text"
-                value={cameraUrl}
-                onChange={(e) => setCameraUrl(e.target.value)}
-                placeholder="http://192.168.x.x:8080/video"
-                disabled={isStreaming}
-              />
-              <button
-                onClick={testConnection}
-                disabled={isStreaming || loading}
-                className="btn"
-                style={{
-                  marginTop: "0.5rem",
-                  background: "#667eea",
-                  color: "white",
-                }}
-              >
-                Test Connection
-              </button>
-            </div>
-          </SettingsSidebar>
+            */}
+          {/* Camera URL Input */}
+          <div className="setting-group">
+            <label>Camera URL</label>
+            <input
+              type="text"
+              value={cameraUrl}
+              onChange={(e) => setCameraUrl(e.target.value)}
+              placeholder="http://192.168.x.x:8080/video"
+              disabled={isStreaming}
+            />
+            <button
+              onClick={testConnection}
+              disabled={isStreaming || loading}
+              className="btn"
+              style={{
+                marginTop: "0.5rem",
+                background: "#667eea",
+                color: "white",
+              }}
+            >
+              Test Connection
+            </button>
+          </div>
+          {/* </SettingsSidebar> */}
 
           {/* Visualization Grid - Right Column with Cards */}
           <section className="visualization-grid cards-grid">

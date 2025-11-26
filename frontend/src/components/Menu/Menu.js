@@ -74,6 +74,18 @@ function Menu({ isOpen, onClose, onToggle }) {
               <span>Dashboard</span>
             </Link>
           </li>
+          <li className={isActive("/old-home") ? "active" : ""}>
+            <Link to="/old-home" className="menu-item">
+              <FiHome className="menu-icon" />
+              <span>Old Home</span>
+            </Link>
+          </li>
+          <li className={isActive("/old-dashboard") ? "active" : ""}>
+            <Link to="/old-dashboard" className="menu-item">
+              <FiMonitor className="menu-icon" />
+              <span>Old Dashboard</span>
+            </Link>
+          </li>
           <li className={isActive("/image") ? "active" : ""}>
             <Link to="/image" className="menu-item">
               <FiImage className="menu-icon" />

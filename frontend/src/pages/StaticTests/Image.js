@@ -3,13 +3,6 @@ import { useNavigate } from "react-router-dom";
 import "../../styles/WebcamPage.css";
 import "../../styles/WebcamCounterNew.css";
 import { useAuth } from "../../context/AuthContext";
-import {
-  LiveFeedCard,
-  HeatmapCard,
-  MetricsCard,
-  GraphCard,
-  SettingsSidebar,
-} from "../../components/Visualization";
 import CSRNetUploader from "../../components/Models/CSRNet/CSRNetUploader";
 import VMambaUploader from "../../components/Models/TMTB/VMambaUploader";
 import MCNNUploader from "../../components/Models/MCNN/MCNNUploader";
@@ -352,6 +345,8 @@ function Image() {
         {!showModelSelector && (
           <div className="webcam-counter-grid">
             {/* Settings Sidebar */}
+            {/* TODO: Visualization components deleted - needs refactoring */}
+            {/*
             <SettingsSidebar
               isStreaming={isStreaming}
               error={error}
@@ -377,99 +372,18 @@ function Image() {
               frameCount={frameCount}
               sourceType="image"
             />
+            */}
 
             {/* Visualization Grid - Modular Cards */}
             <section className="visualization-grid">
-              {/* File Upload Card */}
-              {showLiveCount && (
-                <div className="viz-card live-count-card">
-                  <div className="card-header">
-                    <h3>📸 Image Upload</h3>
-                  </div>
-                  <div className="card-content">
-                    <div
-                      className="upload-area"
-                      onDrop={handleDrop}
-                      onDragOver={handleDragOver}
-                      onClick={() => fileInputRef.current?.click()}
-                      style={{
-                        border: "2px dashed #667eea",
-                        borderRadius: "8px",
-                        padding: "2rem",
-                        textAlign: "center",
-                        cursor: "pointer",
-                        backgroundColor: "#f8f9ff",
-                        transition: "all 0.2s",
-                      }}
-                    >
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileSelect}
-                        style={{ display: "none" }}
-                      />
-                      <div style={{ fontSize: "2rem", marginBottom: "1rem" }}>
-                        📁
-                      </div>
-                      <p style={{ marginBottom: "0.5rem", color: "#333" }}>
-                        Drag and drop image here
-                      </p>
-                      <p style={{ color: "#999", fontSize: "0.9rem" }}>
-                        or click to select (max 10MB)
-                      </p>
-                    </div>
-
-                    {previewUrl && (
-                      <div style={{ marginTop: "1.5rem" }}>
-                        <h4>Preview:</h4>
-                        <img
-                          src={previewUrl}
-                          alt="Preview"
-                          style={{
-                            maxWidth: "100%",
-                            maxHeight: "300px",
-                            borderRadius: "8px",
-                            marginTop: "0.5rem",
-                          }}
-                        />
-                      </div>
-                    )}
-
-                    {results && (
-                      <div
-                        style={{
-                          marginTop: "1.5rem",
-                          padding: "1rem",
-                          backgroundColor: "#f0f9ff",
-                          borderRadius: "8px",
-                        }}
-                      >
-                        <h4>Results:</h4>
-                        <p>
-                          <strong>Count:</strong> {results.count || 0}
-                        </p>
-                        <p>
-                          <strong>Model:</strong>{" "}
-                          {results.model || selectedModel}
-                        </p>
-                        <p>
-                          <strong>Inference Time:</strong>{" "}
-                          {results.inference_time_ms?.toFixed(2)}ms
-                        </p>
-                        {results.unique_count !== undefined && (
-                          <p>
-                            <strong>Unique Count:</strong>{" "}
-                            {results.unique_count}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Heatmap Card */}
+              <p
+                style={{ padding: "2rem", textAlign: "center", color: "#999" }}
+              >
+                Image upload functionality available above. Visualization cards
+                temporarily disabled.
+              </p>
+              {/* Heatmap Card - Commented out (component deleted) */}
+              {/*
               {showHeatmap && (
                 <HeatmapCard
                   isStreaming={results !== null}
@@ -479,8 +393,10 @@ function Image() {
                   displayMode="card"
                 />
               )}
+              */}
 
-              {/* Metrics Card */}
+              {/* Metrics Card - Commented out (component deleted) */}
+              {/*
               {showMetrics && (
                 <MetricsCard
                   isStreaming={results !== null}
@@ -488,8 +404,10 @@ function Image() {
                   results={results}
                 />
               )}
+              */}
 
-              {/* Graph Card */}
+              {/* Graph Card - Commented out (component deleted) */}
+              {/*
               {showGraph && (
                 <GraphCard
                   isStreaming={results !== null}
@@ -497,6 +415,7 @@ function Image() {
                   title="Image Analysis History"
                 />
               )}
+              */}
             </section>
           </div>
         )}

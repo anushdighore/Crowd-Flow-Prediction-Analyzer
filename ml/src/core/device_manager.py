@@ -1,420 +1,156 @@
-"""Device Manager - Minimal GPU Detection (145 lines)"""""""""
+"""
+Device Manager - Hardware Abstraction Layer
+
+Handles:
+- CUDA extension detection
+- PyTorch GPU detection  
+- CPU fallback
+- VRAM monitoring and enforcement (4.5GB hard limit)
+- Device benchmarking
+- Real-time memory tracking
+
+Priority: CUDA Extensions > PyTorch CUDA > CPU
+
+Author: Crowd Flow Prediction System
+Version: 1.0
+Date: October 09, 2025
+"""
 
 import torch
-
-import loggingDevice Manager - Minimal GPU Detection (150 lines MAX)Device Manager - Hardware Abstraction Layer
-
+import logging
+from typing import Dict, List, Optional, Tuple, Literal, Any
+from pathlib import Path
+from dataclasses import dataclass
+from datetime import datetime
+import time
 import yaml
-
-Priority: PyTorch CUDA > CPU fallback
 
 logger = logging.getLogger(__name__)
 
-"""Handles:
+
+# ================================================================================
+# DATA STRUCTURES (Output Contracts)
+# ================================================================================
+
+@dataclass
+class DeviceMetadata:
+    """Device information bundle returned to downstream modules"""
+    device_type: Literal["cuda", "cpu", "cuda_extensions"]
+    device_handle: torch.device
+    device_name: str
+    total_vram_mb: float
+    available_vram_mb: float
+    allocated_vram_mb: float
+    reserved_vram_mb: float
+    compute_capability: Optional[str]
+    cuda_version: Optional[str]
+    fallback_triggered: bool
+    extensions_available: bool = False
 
 
+@dataclass
+class MemoryStatus:
+    """Real-time memory status report"""
+    timestamp: str
+    within_limit: bool
+    usage_percentage: float
+    warning_level: Literal["safe", "caution", "critical"]
+    free_mb: float
+    can_allocate_mb: float
+    allocated_mb: float
+    reserved_mb: float
+    total_mb: float
 
-class DeviceManager:import torch- CUDA extension detection
 
-    """Minimal device manager for PyTorch GPU detection"""
-
-    import logging- PyTorch GPU detection  
-
-    def __init__(self, config_path=None):
-
-        self.config = self._load_config(config_path)from pathlib import Path- CPU fallback
-
-        self.device_type = "cpu"
-
-        self.device_handle = Noneimport yaml- VRAM monitoring and enforcement (4.5GB hard limit)
-
-        self.device_name = "CPU"
-
-        self.total_vram_mb = 0.0- Device benchmarking
-
-        self.available_vram_mb = 0.0
-
-        self.fallback_triggered = Falselogger = logging.getLogger(__name__)- Real-time memory tracking
-
-        self._detect_device()
-
-        logger.info(f"Device: {self.device_type} ({self.device_name})")
-
+class DeviceManager:
+    """
+    Hardware Abstraction Layer - Manages device detection, selection, and monitoring
     
-
-    def _load_config(self, config_path):Priority: CUDA Extensions > PyTorch CUDA > CPU
-
-        """Load YAML config or use defaults"""
-
-        if config_path is None:class DeviceManager:
-
-            return {'device': {'preferred': 'cuda', 'max_vram_mb': 4500, 'fallback': True}}
-
-        try:    """Minimal device manager for PyTorch GPU detection"""Author: Crowd Flow Prediction System
-
-            with open(config_path, 'r') as f:
-
-                return yaml.safe_load(f)    Version: 1.0
-
+    Responsibilities:
+    - Detect computational devices (CUDA Extensions → GPU → CPU)
+    - Enforce 4.5GB VRAM hard limit
+    - Provide automatic fallback when resources exhausted
+    - Monitor real-time memory consumption
+    - Deliver validated device objects to downstream modules
+    """
+    
+    def __init__(self, config_path: Optional[str] = None):
+        """
+        Initialize DeviceManager
+        
+        Args:
+            config_path: Path to device_config.yaml (optional)
+        """
+        self.config: Dict[str, Dict[str, Any]] = self._load_config(config_path)
+        self.available_devices: List[str] = []
+        self.device_info: Dict[str, Dict[str, Any]] = {}
+        self.current_device: Optional[str] = None
+        self.benchmark_cache: Dict[str, Dict[str, Any]] = {}
+        self._fallback_triggered: bool = False
+        self.fallback_triggered: bool = False  # Public property for external access
+        self._vram_limit_mb: float = self.config['device']['max_vram_mb']
+        
+        # Detect devices on initialization
+        self._detect_devices()
+        
+        # Select best device
+        self.current_device = self.get_best_device()
+        
+        # Optional benchmarking
+        if self.config['device'].get('benchmark_on_init', False):
+            logger.info("Running device benchmark...")
+            self.benchmark_device()
+        
+        if self.config['monitoring']['log_device_info']:
+            self._log_device_info()
+    
+    def _load_config(self, config_path: Optional[str]) -> Dict[str, Dict[str, Any]]:
+        """Load device configuration from YAML"""
+        if config_path is None:
+            # Default path relative to this file
+            config_path_obj = Path(__file__).parent.parent.parent / "config" / "device_config.yaml"
+            config_path = str(config_path_obj)
+        
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+            logger.info(f"Loaded device config from {config_path}")
+            
+            # Validate critical settings
+            self._validate_config(config)
+            return config
         except Exception as e:
-
-            logger.warning(f"Config load failed: {e}, using defaults")    def __init__(self, config_path=None):Date: October 09, 2025
-
-            return {'device': {'preferred': 'cuda', 'max_vram_mb': 4500, 'fallback': True}}
-
-            """Initialize with GPU detection""""""
-
-    def _detect_device(self):
-
-        """Detect CUDA GPU or fallback to CPU"""        self.config = self._load_config(config_path)
-
-        if not torch.cuda.is_available():
-
-            logger.info("CUDA not available, using CPU")        self.device_type = "cpu"import torch
-
-            self.device_type = "cpu"
-
-            self.device_handle = torch.device("cpu")        self.device_handle = Noneimport logging
-
-            return
-
-                self.device_name = "CPU"from typing import Dict, List, Optional, Tuple, Literal, Any
-
-        try:
-
-            free_mem, total_mem = torch.cuda.mem_get_info(0)        self.total_vram_mb = 0.0from pathlib import Path
-
-            free_mb = free_mem / (1024**2)
-
-            total_mb = total_mem / (1024**2)        self.available_vram_mb = 0.0from dataclasses import dataclass
-
+            logger.warning(f"Could not load device config: {e}. Using defaults.")
+            return self._get_default_config()
+    
+    def _validate_config(self, config: Dict[str, Any]) -> None:
+        """
+        Validate configuration and clamp invalid values
+        
+        Error Handling: Scenario 6 & 7 from spec
+        """
+        device_pref = config.get('device', {}).get('preferred', 'auto')
+        if device_pref not in ['auto', 'cuda', 'cpu']:
+            logger.error(f"Invalid device preference '{device_pref}', defaulting to 'auto'")
+            config['device']['preferred'] = 'auto'
+        
+        # Scenario 7: VRAM limit exceeds physical capacity
+        if torch.cuda.is_available():
+            total_vram_mb = torch.cuda.get_device_properties(0).total_memory / (1024 ** 2)
+            requested_limit = config.get('device', {}).get('max_vram_mb', 4500)
             
-
-            if free_mb < 500:        self.fallback_triggered = Falsefrom datetime import datetime
-
-                logger.warning(f"Low VRAM ({free_mb:.0f}MB), falling back to CPU")
-
-                self.device_type = "cpu"        import time
-
-                self.device_handle = torch.device("cpu")
-
-                self.fallback_triggered = True        # Detect deviceimport yaml
-
-                return
-
-                    self._detect_device()
-
-            self.device_type = "cuda"
-
-            self.device_handle = torch.device("cuda:0")        logger.info(f"🖥️  Device: {self.device_type} ({self.device_name})")logger = logging.getLogger(__name__)
-
-            self.device_name = torch.cuda.get_device_name(0)
-
-            self.total_vram_mb = total_mb    
-
-            self.available_vram_mb = free_mb
-
-            logger.info(f"GPU: {self.device_name}, VRAM: {free_mb:.0f}/{total_mb:.0f}MB")    def _load_config(self, config_path):
-
-            
-
-        except Exception as e:        """Load YAML config"""# ================================================================================
-
-            logger.error(f"GPU check failed: {e}, using CPU")
-
-            self.device_type = "cpu"        if config_path is None:# DATA STRUCTURES (Output Contracts)
-
-            self.device_handle = torch.device("cpu")
-
-            self.fallback_triggered = True            # Default config# ================================================================================
-
-    
-
-    def get_device(self):            return {
-
-        """Return torch.device for model placement"""
-
-        if self.device_handle is None:                'device': {@dataclass
-
-            self._detect_device()
-
-        return self.device_handle                    'preferred': 'cuda',class DeviceMetadata:
-
-    
-
-    def get_device_str(self):                    'max_vram_mb': 4500,    """Device information bundle returned to downstream modules"""
-
-        """Return device as string ('cuda' or 'cpu')"""
-
-        return self.device_type                    'fallback': True    device_type: Literal["cuda", "cpu", "cuda_extensions"]
-
-    
-
-    def check_memory(self):                }    device_handle: torch.device
-
-        """Check current VRAM usage"""
-
-        if self.device_type != "cuda":            }    device_name: str
-
-            return {"allocated_mb": 0.0, "reserved_mb": 0.0, "free_mb": 0.0, "total_mb": 0.0}
-
-                    total_vram_mb: float
-
-        try:
-
-            allocated = torch.cuda.memory_allocated(0) / (1024**2)        try:    available_vram_mb: float
-
-            reserved = torch.cuda.memory_reserved(0) / (1024**2)
-
-            free_mem, total_mem = torch.cuda.mem_get_info(0)            with open(config_path, 'r') as f:    allocated_vram_mb: float
-
-            free_mb = free_mem / (1024**2)
-
-            total_mb = total_mem / (1024**2)                return yaml.safe_load(f)    reserved_vram_mb: float
-
-            return {"allocated_mb": allocated, "reserved_mb": reserved, "free_mb": free_mb, "total_mb": total_mb}
-
-        except Exception as e:        except Exception as e:    compute_capability: Optional[str]
-
-            logger.error(f"Memory check failed: {e}")
-
-            return {"error": str(e)}            logger.warning(f"⚠️  Config load failed: {e}, using defaults")    cuda_version: Optional[str]
-
-    
-
-    def force_cpu(self):            return {    fallback_triggered: bool
-
-        """Force CPU fallback"""
-
-        logger.warning("Forcing CPU fallback")                'device': {    extensions_available: bool = False
-
-        self.device_type = "cpu"
-
-        self.device_handle = torch.device("cpu")                    'preferred': 'cuda',
-
-        self.fallback_triggered = True
-
-                        'max_vram_mb': 4500,
-
-    def is_gpu_available(self):
-
-        """Check if GPU is active"""                    'fallback': True@dataclass
-
-        return self.device_type == "cuda"
-
-                }class MemoryStatus:
-
-
-
-_device_manager = None            }    """Real-time memory status report"""
-
-
-
-        timestamp: str
-
-def get_device_manager(config_path=None):
-
-    """Get or create global DeviceManager"""    def _detect_device(self):    within_limit: bool
-
-    global _device_manager
-
-    if _device_manager is None:        """Detect CUDA GPU or fallback to CPU"""    usage_percentage: float
-
-        _device_manager = DeviceManager(config_path)
-
-    return _device_manager        if not torch.cuda.is_available():    warning_level: Literal["safe", "caution", "critical"]
-
-
-            logger.info("⚠️  CUDA not available, using CPU")    free_mb: float
-
-            self.device_type = "cpu"    can_allocate_mb: float
-
-            self.device_handle = torch.device("cpu")    allocated_mb: float
-
-            return    reserved_mb: float
-
-            total_mb: float
-
-        # Check VRAM
-
-        try:
-
-            free_mem, total_mem = torch.cuda.mem_get_info(0)class DeviceManager:
-
-            free_mb = free_mem / (1024**2)    """
-
-            total_mb = total_mem / (1024**2)    Hardware Abstraction Layer - Manages device detection, selection, and monitoring
-
-                
-
-            max_vram = self.config['device'].get('max_vram_mb', 4500)    Responsibilities:
-
-                - Detect computational devices (CUDA Extensions → GPU → CPU)
-
-            if free_mb < 500:  # Minimum 500MB needed    - Enforce 4.5GB VRAM hard limit
-
-                logger.warning(f"⚠️  Low VRAM ({free_mb:.0f}MB), falling back to CPU")    - Provide automatic fallback when resources exhausted
-
-                self.device_type = "cpu"    - Monitor real-time memory consumption
-
-                self.device_handle = torch.device("cpu")    - Deliver validated device objects to downstream modules
-
-                self.fallback_triggered = True    """
-
-                return    
-
-                def __init__(self, config_path: Optional[str] = None):
-
-            # GPU available and sufficient VRAM        """
-
-            self.device_type = "cuda"        Initialize DeviceManager
-
-            self.device_handle = torch.device("cuda:0")        
-
-            self.device_name = torch.cuda.get_device_name(0)        Args:
-
-            self.total_vram_mb = total_mb            config_path: Path to device_config.yaml (optional)
-
-            self.available_vram_mb = free_mb        """
-
-                    self.config: Dict[str, Dict[str, Any]] = self._load_config(config_path)
-
-            logger.info(f"✅ GPU: {self.device_name}")        self.available_devices: List[str] = []
-
-            logger.info(f"📊 VRAM: {free_mb:.0f}/{total_mb:.0f}MB")        self.device_info: Dict[str, Dict[str, Any]] = {}
-
-                    self.current_device: Optional[str] = None
-
-        except Exception as e:        self.benchmark_cache: Dict[str, Dict[str, Any]] = {}
-
-            logger.error(f"❌ GPU check failed: {e}, using CPU")        self._fallback_triggered: bool = False
-
-            self.device_type = "cpu"        self._vram_limit_mb: float = self.config['device']['max_vram_mb']
-
-            self.device_handle = torch.device("cpu")        
-
-            self.fallback_triggered = True        # Detect devices on initialization
-
-            self._detect_devices()
-
-    def get_device(self):        
-
-        """Return torch.device for model placement"""        # Select best device
-
-        if self.device_handle is None:        self.current_device = self.get_best_device()
-
-            self._detect_device()        
-
-        return self.device_handle        # Optional benchmarking
-
-            if self.config['device'].get('benchmark_on_init', False):
-
-    def get_device_str(self):            logger.info("Running device benchmark...")
-
-        """Return device as string ('cuda' or 'cpu')"""            self.benchmark_device()
-
-        return self.device_type        
-
-            if self.config['monitoring']['log_device_info']:
-
-    def check_memory(self):            self._log_device_info()
-
-        """Check current VRAM usage (GPU only)"""    
-
-        if self.device_type != "cuda":    def _load_config(self, config_path: Optional[str]) -> Dict[str, Dict[str, Any]]:
-
-            return {        """Load device configuration from YAML"""
-
-                "allocated_mb": 0.0,        if config_path is None:
-
-                "reserved_mb": 0.0,            # Default path relative to this file
-
-                "free_mb": 0.0,            config_path_obj = Path(__file__).parent.parent.parent / "config" / "device_config.yaml"
-
-                "total_mb": 0.0            config_path = str(config_path_obj)
-
-            }        
-
-                try:
-
-        try:            with open(config_path, 'r', encoding='utf-8') as f:
-
-            allocated = torch.cuda.memory_allocated(0) / (1024**2)                config = yaml.safe_load(f)
-
-            reserved = torch.cuda.memory_reserved(0) / (1024**2)            logger.info(f"Loaded device config from {config_path}")
-
-            free_mem, total_mem = torch.cuda.mem_get_info(0)            
-
-            free_mb = free_mem / (1024**2)            # Validate critical settings
-
-            total_mb = total_mem / (1024**2)            self._validate_config(config)
-
-                        return config
-
-            return {        except Exception as e:
-
-                "allocated_mb": allocated,            logger.warning(f"Could not load device config: {e}. Using defaults.")
-
-                "reserved_mb": reserved,            return self._get_default_config()
-
-                "free_mb": free_mb,    
-
-                "total_mb": total_mb    def _validate_config(self, config: Dict[str, Any]) -> None:
-
-            }        """
-
-        except Exception as e:        Validate configuration and clamp invalid values
-
-            logger.error(f"Memory check failed: {e}")        
-
-            return {"error": str(e)}        Error Handling: Scenario 6 & 7 from spec
-
-            """
-
-    def force_cpu(self):        device_pref = config.get('device', {}).get('preferred', 'auto')
-
-        """Force CPU fallback"""        if device_pref not in ['auto', 'cuda', 'cpu']:
-
-        logger.warning("🔄 Forcing CPU fallback")            logger.error(f"Invalid device preference '{device_pref}', defaulting to 'auto'")
-
-        self.device_type = "cpu"            config['device']['preferred'] = 'auto'
-
-        self.device_handle = torch.device("cpu")        
-
-        self.fallback_triggered = True        # Scenario 7: VRAM limit exceeds physical capacity
-
-            if torch.cuda.is_available():
-
-    def is_gpu_available(self):            total_vram_mb = torch.cuda.get_device_properties(0).total_memory / (1024 ** 2)
-
-        """Quick check if GPU is active"""            requested_limit = config.get('device', {}).get('max_vram_mb', 4500)
-
-        return self.device_type == "cuda"            
-
             # Clamp to 80% of physical VRAM
-
             max_safe_limit = total_vram_mb * 0.80
-
-# Global singleton instance            if requested_limit > max_safe_limit:
-
-_device_manager = None                logger.warning(
-
+            if requested_limit > max_safe_limit:
+                logger.warning(
                     f"VRAM limit {requested_limit}MB exceeds safe capacity "
-
                     f"(80% of {total_vram_mb:.0f}MB). Clamping to {max_safe_limit:.0f}MB"
-
-def get_device_manager(config_path=None):                )
-
-    """Get or create global DeviceManager instance"""                config['device']['max_vram_mb'] = int(max_safe_limit)
-
-    global _device_manager    
-
-    if _device_manager is None:    def _get_default_config(self) -> Dict[str, Dict[str, Any]]:
-
-        _device_manager = DeviceManager(config_path)        """Return default configuration if YAML not found"""
-
-    return _device_manager        return {
-
+                )
+                config['device']['max_vram_mb'] = int(max_safe_limit)
+    
+    def _get_default_config(self) -> Dict[str, Dict[str, Any]]:
+        """Return default configuration if YAML not found"""
+        return {
             'device': {
                 'preferred': 'auto',
                 'fallback': True,
@@ -590,6 +326,7 @@ def get_device_manager(config_path=None):                )
             # Scenario D & Error Scenario 1: No CUDA or VRAM exhausted - fallback to CPU
             if self.config['device']['fallback']:
                 self._fallback_triggered = True
+                self.fallback_triggered = True
                 logger.warning(
                     "⚠️  CUDA not available or VRAM exceeded (Scenario 1 & 2), "
                     "falling back to CPU"
@@ -611,6 +348,7 @@ def get_device_manager(config_path=None):                )
                 return preferred
             elif self.config['device']['fallback']:
                 self._fallback_triggered = True
+                self.fallback_triggered = True
                 logger.warning(
                     f"Requested device '{preferred}' not available, "
                     f"falling back to CPU"

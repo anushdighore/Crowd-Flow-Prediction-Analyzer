@@ -15,8 +15,12 @@ import Image from "./pages/StaticTests/Image";
 import Video from "./pages/StaticTests/Video";
 import Template from "./pages/Template";
 import Template2 from "./pages/template2";
+import Main from "./pages/Main/Main";
+import StreamTest from "./pages/StreamTest";
 import Dashboard from "./pages/Dashboard/Dashboard";
-import ExternalCameraPage from "./pages/ExternalCamera/ExternalCamera";
+import ExternalCamera from "./pages/ExternalCamera/ExternalCameraNew";
+import OldHome from "./pages/Main/OldHome";
+import OldMain from "./pages/Main/OldMain";
 import CSRNetUploader from "./components/Models/CSRNet/CSRNetUploader";
 import VMambaUploader from "./components/Models/TMTB/VMambaUploader";
 import MCNNUploader from "./components/Models/MCNN/MCNNUploader";
@@ -27,6 +31,8 @@ import HLSStreamingPage from "./components/Camera/HLSStreamingPage";
 import LoginPage from "./pages/Login/LoginPage";
 import Layout from "./components/Layout/Layout";
 import { useAuth } from "./context/AuthContext";
+import { WebcamProvider } from "./context/WebcamContext";
+import { ExternalCameraProvider } from "./context/ExternalCameraContext";
 
 function AppContent() {
   const { isAuthenticated } = useAuth();
@@ -87,7 +93,24 @@ function AppContent() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/stream-test" element={<StreamTest />} />
       <Route path="/dashboard" element={<Dashboard />} />
+      <Route
+        path="/old-home"
+        element={
+          <Layout>
+            <OldHome />
+          </Layout>
+        }
+      />
+      <Route
+        path="/old-dashboard"
+        element={
+          <Layout showRightMenu={true}>
+            <OldMain />
+          </Layout>
+        }
+      />
       <Route
         path="/"
         element={
@@ -243,14 +266,8 @@ function AppContent() {
           </Layout>
         }
       />
-      <Route
-        path="/webcam"
-        element={
-          <Layout>
-            <Webcam />
-          </Layout>
-        }
-      />
+      <Route path="/webcam" element={<Webcam />} />
+      <Route path="/main" element={<Main />} />
       <Route
         path="/image"
         element={
@@ -259,14 +276,7 @@ function AppContent() {
           </Layout>
         }
       />
-      <Route
-        path="/external-camera"
-        element={
-          <Layout>
-            <ExternalCameraPage />
-          </Layout>
-        }
-      />
+      <Route path="/external-camera" element={<ExternalCamera />} />
       <Route
         path="/hls"
         element={
@@ -314,7 +324,11 @@ function AppContent() {
 function App() {
   return (
     <Router>
-      <AppContent />
+      <WebcamProvider>
+        <ExternalCameraProvider>
+          <AppContent />
+        </ExternalCameraProvider>
+      </WebcamProvider>
     </Router>
   );
 }

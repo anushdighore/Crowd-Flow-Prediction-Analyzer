@@ -9,8 +9,13 @@ import logging
 # Import config loader with fallback for different import contexts
 try:
     from ...core.config_loader import load_tmtb_config
+    from ...core.device_manager import get_device_manager
 except (ImportError, ValueError):
     from core.config_loader import load_tmtb_config
+    try:
+        from core.device_manager import get_device_manager
+    except ImportError:
+        get_device_manager = None
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +57,14 @@ def get_model(checkpoint_path: str = None):
         # Import model class
         from .model import mamba
         
-        # Get device
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # Get device via DeviceManager for intelligent selection
+        if get_device_manager is not None:
+            try:
+                device = torch.device(get_device_manager().current_device)
+            except Exception:
+                device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        else:
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         logger.info(f"   Using device: {device}")
         
         # CRITICAL: Create model on CPU first (avoids 15+ minute GPU initialization overhead)

@@ -10,6 +10,12 @@ import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation
 from filterpy.kalman import KalmanFilter
 
+# Import DeviceManager for consistent device selection
+try:
+    from core.device_manager import get_device_manager
+except ImportError:
+    get_device_manager = None
+
 class TrackState:
     NEW = 0
     TRACKED = 1
@@ -55,7 +61,14 @@ class Track:
 
 class CrowdDensityEstimation:
     def __init__(self, model_path='yolo11n.pt', conf_threshold=0.15, iou_threshold=0.45):
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        # Use DeviceManager for intelligent device selection
+        if get_device_manager is not None:
+            try:
+                self.device = get_device_manager().current_device
+            except Exception:
+                self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        else:
+            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         print(f"Using device: {self.device}")
         self.model = YOLO(model_path)
         self.model.to(self.device)

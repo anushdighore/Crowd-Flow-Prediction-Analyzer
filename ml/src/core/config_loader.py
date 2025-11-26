@@ -171,6 +171,27 @@ def _get_config_path(model_name: str) -> Path:
 
 
 @lru_cache(maxsize=8)
+def _load_csrnet_config_cached(config_path_str: str) -> CSRNetConfig:
+    """Internal cached loader - DO NOT CALL DIRECTLY
+    
+    Args:
+        config_path_str: String path to config file (for cache key stability)
+        
+    Returns:
+        CSRNetConfig with validated configuration
+    """
+    config_path = Path(config_path_str)
+    logger.info(f"Loading CSRNet config from: {config_path}")
+    
+    with open(config_path, 'r') as f:
+        config_dict = yaml.safe_load(f)
+    
+    config = CSRNetConfig(**config_dict)
+    logger.debug(f"CSRNet config loaded successfully")
+    
+    return config
+
+
 def load_csrnet_config(config_path: Optional[str] = None) -> CSRNetConfig:
     """Load CSRNet configuration from YAML file
     
@@ -191,18 +212,32 @@ def load_csrnet_config(config_path: Optional[str] = None) -> CSRNetConfig:
     else:
         config_path = Path(config_path)
     
-    logger.info(f"Loading CSRNet config from: {config_path}")
+    # Use string path for cache stability
+    return _load_csrnet_config_cached(str(config_path))
+
+
+@lru_cache(maxsize=8)
+def _load_tmtb_config_cached(config_path_str: str) -> TMTBConfig:
+    """Internal cached loader - DO NOT CALL DIRECTLY
+    
+    Args:
+        config_path_str: String path to config file (for cache key stability)
+        
+    Returns:
+        TMTBConfig with validated configuration
+    """
+    config_path = Path(config_path_str)
+    logger.info(f"Loading TMTB config from: {config_path}")
     
     with open(config_path, 'r') as f:
         config_dict = yaml.safe_load(f)
     
-    config = CSRNetConfig(**config_dict)
-    logger.debug(f"CSRNet config loaded successfully")
+    config = TMTBConfig(**config_dict)
+    logger.debug(f"TMTB config loaded successfully")
     
     return config
 
 
-@lru_cache(maxsize=8)
 def load_tmtb_config(config_path: Optional[str] = None) -> TMTBConfig:
     """Load TMTB configuration from YAML file
     
@@ -223,21 +258,14 @@ def load_tmtb_config(config_path: Optional[str] = None) -> TMTBConfig:
     else:
         config_path = Path(config_path)
     
-    logger.info(f"Loading TMTB config from: {config_path}")
-    
-    with open(config_path, 'r') as f:
-        config_dict = yaml.safe_load(f)
-    
-    config = TMTBConfig(**config_dict)
-    logger.debug(f"TMTB config loaded successfully")
-    
-    return config
+    # Use string path for cache stability
+    return _load_tmtb_config_cached(str(config_path))
 
 
 def clear_config_cache():
     """Clear config cache (useful for hot-reloading during development)"""
-    load_csrnet_config.cache_clear()
-    load_tmtb_config.cache_clear()
+    _load_csrnet_config_cached.cache_clear()
+    _load_tmtb_config_cached.cache_clear()
     logger.info("Config cache cleared")
 
 

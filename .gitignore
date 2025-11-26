@@ -36,6 +36,19 @@ crowdenv/
 *.pkl
 *.pickle
 
+# YOLO Models
+*.yolo
+*.yaml
+*.yml
+yolov8*
+yolov5*
+yolov9*
+yolov10*
+models/yolo/
+models/detection/
+!models/yolo/configs/
+!models/yolo/.gitkeep
+
 # Directories
 build/
 dist/

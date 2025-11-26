@@ -53,10 +53,10 @@ class Track:
             [0, 1, 0, 0]
         ])
         
-        # Covariances
-        self.kf.P *= 10
-        self.kf.R *= 1
-        self.kf.Q *= 0.1
+        # Covariances - Increased process noise for better tracking, reduced measurement noise
+        self.kf.P *= 10  # Initial state covariance
+        self.kf.R *= 0.5  # Measurement noise (reduced from 1.0 for less jitter)
+        self.kf.Q *= 0.05  # Process noise (reduced from 0.1 for smoother tracking)
         
         self.last_box = box
         
@@ -108,16 +108,19 @@ class Track:
         self.hits += 1
         self.time_since_update = 0
         
-        # Transition to TRACKED after 3 hits
-        if self.state == TrackState.NEW and self.hits >= 3:
+        # Transition to TRACKED after 2 hits (was 3)
+        if self.state == TrackState.NEW and self.hits >= 2:
             self.state = TrackState.TRACKED
     
     def mark_missed(self):
         """Mark track as missed this frame"""
         self.time_since_update += 1
         
-        # Transition to LOST after 10 misses
-        if self.state == TrackState.TRACKED and self.time_since_update > 10:
+        # Transition to LOST after missing frames
+        # NEW tracks are lost quickly (3 frames), TRACKED tracks can survive longer (5 frames)
+        if self.state == TrackState.NEW and self.time_since_update > 3:
+            self.state = TrackState.LOST
+        elif self.state == TrackState.TRACKED and self.time_since_update > 5:
             self.state = TrackState.LOST
 
 
@@ -201,20 +204,30 @@ class KalmanTracker:
             for track in self.tracks:
                 track.mark_missed()
         
-        # Remove lost tracks
+        # Remove lost tracks but keep reference for reporting
+        lost_track_ids = [t.id for t in self.tracks if t.state == TrackState.LOST]
         self.tracks = [t for t in self.tracks if t.state != TrackState.LOST]
         
-        # Update track history
+        # Clean up track history for lost tracks
+        for track_id in lost_track_ids:
+            if track_id in self.track_history:
+                del self.track_history[track_id]
+            if track_id in self.track_colors:
+                del self.track_colors[track_id]
+        
+        # Update track history for all active tracks (NEW and TRACKED)
         for track in self.tracks:
-            if track.state == TrackState.TRACKED:
+            if track.state != TrackState.LOST:
                 pos = track.kf.x[:2].flatten()
-                self.track_history[track.id].append(tuple(pos))
+                # Store as list [x, y] for frontend compatibility
+                self.track_history[track.id].append([float(pos[0]), float(pos[1])])
                 
                 # Limit history length
                 if len(self.track_history[track.id]) > 50:
                     self.track_history[track.id].pop(0)
         
-        return self.get_tracked_tracks()
+        # Return all active tracks (NEW + TRACKED) so UI can show warm-up state
+        return [t for t in self.tracks if t.state != TrackState.LOST]
     
     def _match_detections(
         self,

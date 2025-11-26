@@ -44,13 +44,27 @@ class YOLOv8Counter:
         self.conf_threshold = conf_threshold
         self.iou_threshold = iou_threshold
         
-        # Load model
+        # Load model - check multiple locations
         logger.info(f"🔧 Loading YOLOv8 model from {model_path}...")
         
-        if Path(model_path).exists():
-            self.model = YOLO(model_path)
-        else:
-            logger.warning(f"⚠️ Model not found at {model_path}")
+        # Try multiple paths: direct, backend folder, ml folder
+        backend_path = Path(__file__).parent.parent.parent.parent.parent / "backend" / model_path
+        possible_paths = [
+            Path(model_path),  # Direct path
+            backend_path,      # backend/yolov8*.pt
+            Path(__file__).parent / model_path,  # Same folder as this file
+        ]
+        
+        model_found = False
+        for check_path in possible_paths:
+            if check_path.exists():
+                logger.info(f"✅ Found model at {check_path}")
+                self.model = YOLO(str(check_path))
+                model_found = True
+                break
+        
+        if not model_found:
+            logger.warning(f"⚠️ Model not found at {model_path}, tried: {[str(p) for p in possible_paths]}")
             logger.info("📥 Downloading YOLOv8n pretrained model...")
             self.model = YOLO('yolov8n.pt')
         

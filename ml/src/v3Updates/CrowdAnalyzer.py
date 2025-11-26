@@ -14,6 +14,13 @@ from scipy.optimize import linear_sum_assignment
 from scipy.spatial.transform import Rotation
 from filterpy.kalman import KalmanFilter
 from ultralytics import YOLO
+
+# Import DeviceManager for consistent device selection
+try:
+    from core.device_manager import get_device_manager
+except ImportError:
+    get_device_manager = None
+
 from pedpy import (
     TrajectoryData, plot_trajectories, WalkableArea, MeasurementArea,
     compute_classic_density, compute_individual_voronoi_polygons, compute_voronoi_density,
@@ -494,7 +501,14 @@ class Track:
 
 class CrowdDensityEstimation:
     def __init__(self, model_path='yolo11x.pt', conf_threshold=0.15, iou_threshold=0.45):
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        # Use DeviceManager for intelligent device selection
+        if get_device_manager is not None:
+            try:
+                self.device = get_device_manager().current_device
+            except Exception:
+                self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        else:
+            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         print(f"Using device: {self.device}")
         self.model = YOLO(model_path)
         self.model.to(self.device)

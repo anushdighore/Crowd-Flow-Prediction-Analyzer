@@ -3,6 +3,7 @@ Multi-Model Real-Time Webcam Crowd Counter API
 Supports: VMamba-TMTB, CSRNet, YOLOv8, MCNN
 """
 
+import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -20,6 +21,10 @@ from PIL import Image
 import io
 from typing import Dict, Any, Optional
 import os
+import matplotlib
+matplotlib.use('Agg')  # Use non-GUI backend
+import matplotlib.pyplot as plt
+from matplotlib import cm
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -57,8 +62,11 @@ class ConnectionManager:
         logger.info(f"✅ WebSocket connected. Total connections: {len(self.active_connections)}")
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-        logger.info(f"❌ WebSocket disconnected. Total connections: {len(self.active_connections)}")
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+            logger.info(f"❌ WebSocket disconnected. Total connections: {len(self.active_connections)}")
+        else:
+            logger.warning(f"⚠️ Attempted to disconnect websocket not in active connections")
 
     async def send_json(self, websocket: WebSocket, data: dict):
         await websocket.send_json(data)
@@ -260,7 +268,54 @@ def process_frame_with_yolov8(frame_data: str) -> Dict[str, Any]:
         }
 
 
-def process_frame_with_density_model(frame_data: str) -> Dict[str, Any]:
+def generate_heatmap_from_density(density_map: np.ndarray, original_image: Image.Image) -> str:
+    """
+    Generate heatmap overlay from density map
+    
+    Args:
+        density_map: Density map numpy array
+        original_image: Original PIL Image
+        
+    Returns:
+        Base64 encoded heatmap image
+    """
+    try:
+        logger.info(f"🎨 Generating heatmap - density shape: {density_map.shape}, image size: {original_image.size}")
+        
+        # Normalize density map to 0-255
+        density_normalized = (density_map - density_map.min()) / (density_map.max() - density_map.min() + 1e-8)
+        density_normalized = (density_normalized * 255).astype(np.uint8)
+        logger.info(f"📊 Normalized density range: {density_normalized.min()}-{density_normalized.max()}")
+        
+        # Resize density map to match original image size
+        density_resized = cv2.resize(density_normalized, (original_image.width, original_image.height))
+        logger.info(f"📏 Resized density to: {density_resized.shape}")
+        
+        # Apply colormap (COLORMAP_JET gives red=high, blue=low)
+        heatmap_colored = cv2.applyColorMap(density_resized, cv2.COLORMAP_JET)
+        logger.info(f"🎨 Applied colormap, shape: {heatmap_colored.shape}")
+        
+        # Convert original image to numpy array (RGB to BGR for OpenCV)
+        original_bgr = cv2.cvtColor(np.array(original_image), cv2.COLOR_RGB2BGR)
+        
+        # Blend heatmap with original image (60% heatmap, 40% original)
+        overlay = cv2.addWeighted(original_bgr, 0.4, heatmap_colored, 0.6, 0)
+        logger.info(f"✨ Blended overlay created, shape: {overlay.shape}")
+        
+        # Encode to base64
+        _, buffer = cv2.imencode('.jpg', overlay, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        img_base64 = base64.b64encode(buffer).decode()
+        
+        result = f"data:image/jpeg;base64,{img_base64}"
+        logger.info(f"✅ Heatmap encoded to base64, total length: {len(result)}")
+        return result
+    
+    except Exception as e:
+        logger.error(f"❌ Error generating heatmap: {e}", exc_info=True)
+        return None
+
+
+def process_frame_with_density_model(frame_data: str, return_heatmap: bool = False) -> Dict[str, Any]:
     """Process frame with density-based models (VMamba, CSRNet, MCNN)"""
     try:
         start_time = time.time()
@@ -297,7 +352,7 @@ def process_frame_with_density_model(frame_data: str) -> Dict[str, Any]:
         total_time = (time.time() - start_time) * 1000
         fps = 1000 / total_time if total_time > 0 else 0
         
-        return {
+        result = {
             "success": True,
             "count": int(count),
             "reasoning": reasoning,
@@ -317,6 +372,20 @@ def process_frame_with_density_model(frame_data: str) -> Dict[str, Any]:
             },
             "model_type": current_model_type
         }
+        
+        # Generate heatmap if requested
+        if return_heatmap:
+            logger.info(f"🔥 Heatmap requested, generating from density map shape: {density_np.shape}")
+            heatmap_base64 = generate_heatmap_from_density(density_np, image)
+            if heatmap_base64:
+                logger.info(f"✅ Heatmap generated successfully, length: {len(heatmap_base64)}")
+                result["heatmap"] = heatmap_base64
+            else:
+                logger.error("❌ Heatmap generation returned None")
+        else:
+            logger.info("⚠️ Heatmap NOT requested (return_heatmap=False)")
+        
+        return result
     
     except Exception as e:
         logger.error(f"Error processing frame: {e}")
@@ -334,6 +403,7 @@ async def websocket_endpoint(websocket: WebSocket):
     Receives base64 encoded frames and returns count predictions
     """
     await manager.connect(websocket)
+    connected = True  # Explicit loop control flag
     
     if current_model is None:
         await manager.send_json(websocket, {
@@ -343,10 +413,20 @@ async def websocket_endpoint(websocket: WebSocket):
         return
     
     try:
-        while True:
-            # Receive frame data from client
-            data = await websocket.receive_json()
+        while connected:  # Use flag instead of True for clean termination
+            # Receive frame data from client with timeout to detect disconnects
+            try:
+                data = await asyncio.wait_for(websocket.receive_json(), timeout=5.0)
+            except asyncio.TimeoutError:
+                # No data received in 5 seconds - client likely disconnected
+                logger.info("⏱️ WebSocket receive timeout - client may have disconnected")
+                break
+            
             frame_data = data.get("frame")
+            return_heatmap = data.get("heatmap", True)
+            requested_model = data.get("model", "csrnet")  # Get model from frontend
+            
+            logger.info(f"📥 WebSocket request - model: {requested_model}, heatmap: {return_heatmap}")
             
             if not frame_data:
                 await manager.send_json(websocket, {
@@ -355,21 +435,54 @@ async def websocket_endpoint(websocket: WebSocket):
                 })
                 continue
             
-            # Process frame based on model type
-            if current_model_type == 'yolov8':
+            # Map frontend model names to backend model types
+            model_type_map = {
+                "csrnet": "csrnet",
+                "mcnn": "mcnn",
+                "vmamba": "vmamba_tmtb",
+                "yolo": "yolov8"
+            }
+            processing_model = model_type_map.get(requested_model.lower(), current_model_type)
+            
+            # ✅ FIX: Load the requested model if it's different from current_model_type
+            if processing_model != current_model_type:
+                try:
+                    logger.info(f"🔄 Switching model from {current_model_type} to {processing_model}")
+                    await load_model(processing_model)
+                except Exception as e:
+                    logger.error(f"❌ Failed to switch model: {e}")
+                    await manager.send_json(websocket, {
+                        "success": False,
+                        "error": f"Failed to load model {processing_model}: {str(e)}"
+                    })
+                    continue
+            
+            # Process frame based on requested model (now actually using the loaded model)
+            if processing_model == 'yolov8':
                 result = process_frame_with_yolov8(frame_data)
             else:
-                result = process_frame_with_density_model(frame_data)
+                result = process_frame_with_density_model(frame_data, return_heatmap=return_heatmap)
+            
+            # Log what we're sending back
+            has_heatmap = "heatmap" in result
+            logger.info(f"📤 WebSocket response - success: {result.get('success')}, has_heatmap: {has_heatmap}")
             
             # Send result back to client
             await manager.send_json(websocket, result)
     
     except WebSocketDisconnect:
+        connected = False
         manager.disconnect(websocket)
-        logger.info("Client disconnected")
+        logger.info("✅ Client disconnected - loop terminated")
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        connected = False
+        logger.error(f"❌ WebSocket error: {e}")
         manager.disconnect(websocket)
+    finally:
+        # Ensure cleanup even if disconnect was already handled
+        if websocket in manager.active_connections:
+            manager.disconnect(websocket)
+        logger.info("🧹 WebSocket cleanup complete")
 
 
 if __name__ == "__main__":

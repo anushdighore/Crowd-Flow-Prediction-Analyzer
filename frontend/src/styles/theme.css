@@ -1,43 +1,45 @@
 /* Global Theme - Dark & Light Mode CSS Variables */
 
-/* ===== DARK MODE (Default) ===== */
+/* ===== CYBERPUNK ENTERPRISE DARK MODE ===== */
 :root[data-theme="dark"],
 :root {
-  /* Background Colors */
-  --bg-primary: #0f0f0f;
-  --bg-secondary: #1a1a1a;
-  --bg-tertiary: #2d2d2d;
-  --bg-hover: rgba(255, 255, 255, 0.05);
+  /* Background Colors - Deep Charcoal */
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #0f0f0f;
+  --bg-tertiary: #1a1a1a;
+  --bg-hover: rgba(0, 255, 255, 0.08);
 
-  /* Text Colors */
+  /* Text Colors - Pure White */
   --text-primary: #ffffff;
-  --text-secondary: #cccccc;
-  --text-tertiary: #999999;
+  --text-secondary: #b8b8b8;
+  --text-tertiary: #808080;
 
-  /* Border Colors */
-  --border-primary: #2d2d2d;
-  --border-secondary: #3d3d3d;
+  /* Border Colors - Neon Cyan */
+  --border-primary: rgba(0, 255, 255, 0.2);
+  --border-secondary: rgba(0, 255, 255, 0.3);
 
-  /* Accent Colors */
-  --accent-primary: #667eea;
-  --accent-secondary: #764ba2;
-  --accent-tertiary: #d4c5b9;
-  --accent-danger: #dc3545;
-  --accent-success: #28a745;
-  --accent-warning: #ffc107;
+  /* Accent Colors - Electric Cyan */
+  --accent-primary: #00ffff;
+  --accent-secondary: #00cccc;
+  --accent-tertiary: #009999;
+  --accent-danger: #ff0066;
+  --accent-success: #00ff88;
+  --accent-warning: #ffaa00;
 
-  /* Component Colors */
-  --navbar-bg: #1a1a1a;
-  --sidebar-bg: #0f0f0f;
-  --content-bg: #1a1a1a;
-  --card-bg: #2d2d2d;
-  --input-bg: #2d2d2d;
-  --input-border: #3d3d3d;
+  /* Component Colors - Glassmorphism */
+  --navbar-bg: rgba(15, 15, 15, 0.8);
+  --sidebar-bg: rgba(10, 10, 10, 0.9);
+  --content-bg: rgba(15, 15, 15, 0.6);
+  --card-bg: rgba(26, 26, 26, 0.4);
+  --input-bg: rgba(0, 0, 0, 0.3);
+  --input-border: rgba(0, 255, 255, 0.3);
 
-  /* Shadows */
-  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 12px 35px rgba(0, 0, 0, 0.5);
+  /* Shadows - Neon Glow */
+  --shadow-sm: 0 2px 4px rgba(0, 255, 255, 0.1);
+  --shadow-md: 0 4px 12px rgba(0, 255, 255, 0.2);
+  --shadow-lg: 0 12px 35px rgba(0, 255, 255, 0.3);
+  --shadow-neon: 0 0 20px rgba(0, 255, 255, 0.5), 0 0 40px rgba(0, 255, 255, 0.3);
+  --shadow-danger: 0 0 20px rgba(255, 0, 102, 0.5), 0 0 40px rgba(255, 0, 102, 0.3);
 
   /* Transitions */
   --transition-fast: 0.15s ease;
@@ -47,36 +49,36 @@
 
 /* ===== LIGHT MODE ===== */
 :root[data-theme="light"] {
-  /* Background Colors - Beige Tones */
-  --bg-primary: #f9f7f5;
-  --bg-secondary: #f0ede9;
-  --bg-tertiary: #e8e4df;
-  --bg-hover: rgba(102, 126, 234, 0.05);
+  /* Background Colors - Beige */
+  --bg-primary: #f5f5dc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f9f7f5;
+  --bg-hover: rgba(5, 150, 105, 0.05);
 
-  /* Text Colors - Dark for contrast */
-  --text-primary: #2c2c2c;
-  --text-secondary: #4a4a4a;
-  --text-tertiary: #6d6d6d;
+  /* Text Colors - Warm dark grays */
+  --text-primary: #1f2937;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
 
-  /* Border Colors - Subtle beige */
-  --border-primary: #e8e4df;
-  --border-secondary: #dfd9d2;
+  /* Border Colors - Soft gray */
+  --border-primary: #e5e5e5;
+  --border-secondary: #d1d5db;
 
-  /* Accent Colors - Violet Primary + Beige Secondary */
-  --accent-primary: #667eea;
-  --accent-secondary: #764ba2;
+  /* Accent Colors - Natural emerald */
+  --accent-primary: #059669;
+  --accent-secondary: #047857;
   --accent-tertiary: #d4c5b9;
   --accent-danger: #dc3545;
   --accent-success: #28a745;
   --accent-warning: #ffc107;
 
   /* Component Colors */
-  --navbar-bg: #f9f7f5;
-  --sidebar-bg: #f0ede9;
-  --content-bg: #f9f7f5;
-  --card-bg: #f0ede9;
+  --navbar-bg: #ffffff;
+  --sidebar-bg: #f5f5dc;
+  --content-bg: #ffffff;
+  --card-bg: #ffffff;
   --input-bg: #ffffff;
-  --input-border: #dfd9d2;
+  --input-border: #d1d5db;
 
   /* Shadows */
   --shadow-sm: 0 2px 4px rgba(44, 44, 44, 0.08);
@@ -89,7 +91,158 @@
   --transition-slow: 0.5s ease;
 }
 
-/* ===== Global Theme Application ===== */
+/* ===== CYBERPUNK GLASSMORPHISM STYLES ===== */
+.glass-panel {
+  background: rgba(26, 26, 26, 0.4);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 255, 255, 0.2);
+  border-radius: 16px;
+  box-shadow: var(--shadow-neon);
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(0, 255, 255, 0.8), 
+    transparent
+  );
+  animation: scanline 3s linear infinite;
+}
+
+.glass-panel:hover {
+  border-color: rgba(0, 255, 255, 0.4);
+  box-shadow: 0 0 30px rgba(0, 255, 255, 0.6), 0 0 60px rgba(0, 255, 255, 0.4);
+  transform: translateY(-2px);
+  transition: all 0.3s ease;
+}
+
+.neon-border {
+  position: relative;
+  border: 1px solid rgba(0, 255, 255, 0.3);
+  border-radius: 12px;
+}
+
+.neon-border::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 14px;
+  padding: 2px;
+  background: linear-gradient(45deg, #00ffff, #00cccc, #00ffff);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.neon-border:hover::after {
+  opacity: 1;
+  animation: rotate 3s linear infinite;
+}
+
+.cyber-button {
+  background: linear-gradient(135deg, rgba(0, 255, 255, 0.1), rgba(0, 255, 255, 0.05));
+  border: 1px solid rgba(0, 255, 255, 0.3);
+  color: #00ffff;
+  backdrop-filter: blur(10px);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.cyber-button::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: radial-gradient(circle, rgba(0, 255, 255, 0.3), transparent);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+  border-radius: 50%;
+}
+
+.cyber-button:hover {
+  border-color: #00ffff;
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.5), inset 0 0 20px rgba(0, 255, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.cyber-button:hover::before {
+  width: 300px;
+  height: 300px;
+}
+
+.cyber-input {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(0, 255, 255, 0.2);
+  color: #ffffff;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.cyber-input:focus {
+  border-color: #00ffff;
+  box-shadow: 0 0 15px rgba(0, 255, 255, 0.4), inset 0 0 15px rgba(0, 255, 255, 0.1);
+  outline: none;
+}
+
+.cyber-text {
+  color: #ffffff;
+  text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+}
+
+.cyber-text-secondary {
+  color: #b8b8b8;
+  text-shadow: 0 0 5px rgba(0, 255, 255, 0.3);
+}
+
+/* ===== CYBERPUNK ANIMATIONS ===== */
+@keyframes scanline {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { 
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.5), 0 0 40px rgba(0, 255, 255, 0.3);
+  }
+  50% { 
+    box-shadow: 0 0 30px rgba(0, 255, 255, 0.8), 0 0 60px rgba(0, 255, 255, 0.5);
+  }
+}
+
+@keyframes neon-flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+.cyber-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.cyber-flicker {
+  animation: neon-flicker 3s ease-in-out infinite;
+}
+
+/* ===== CYBERPUNK COMPONENT STYLES ===== */
 * {
   transition: background-color var(--transition-normal),
     color var(--transition-normal), border-color var(--transition-normal);

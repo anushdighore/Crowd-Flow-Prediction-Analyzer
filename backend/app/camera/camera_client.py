@@ -66,6 +66,7 @@ class CameraClient:
         last_error = None
         
         for url in urls_to_try:
+            session = None
             try:
                 session = await self.get_session()
                 async with session.get(
@@ -134,6 +135,10 @@ class CameraClient:
             except Exception as e:
                 last_error = f"Unexpected error processing frame from {url}: {str(e)}"
                 logger.debug(last_error)
+            finally:
+                # Explicitly close session to prevent memory leaks
+                if session and not session.closed:
+                    await session.close()
         
         # If we get here, all attempts failed
         logger.error(f"❌ Failed to get frame from camera. Last error: {last_error}")

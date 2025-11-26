@@ -19,13 +19,42 @@ if str(ml_path) not in sys.path:
 class GatedModelRouter:
     """
     Gated architecture that routes requests to the appropriate model
-    Supports: CSRNet, TMTB (VMamba), YOLO
+    Supports: CSRNet, TMTB (VMamba), YOLO (with variants: nano, small, medium, large, xlarge)
     """
+    
+    # YOLO variant to checkpoint mapping
+    YOLO_VARIANT_MAP = {
+        "yolo": "yolov8n.pt",
+        "yolo-nano": "yolov8n.pt",
+        "yolo-small": "yolov8s.pt",
+        "yolo-medium": "yolov8m.pt",
+        "yolo-large": "yolov8l.pt",
+        "yolo-xlarge": "yolov8x.pt",
+    }
     
     def __init__(self):
         self.models = {}
         self.model_apis = {}
         self._load_model_apis()
+    
+    def _normalize_model_type(self, model_type: str) -> tuple:
+        """
+        Normalize model type and extract YOLO checkpoint if applicable.
+        
+        Args:
+            model_type: Raw model type string (e.g., 'yolo-xlarge', 'csrnet')
+            
+        Returns:
+            Tuple of (normalized_type, yolo_checkpoint or None)
+        """
+        model_type = model_type.lower()
+        
+        # Handle YOLO variants
+        if model_type.startswith("yolo"):
+            checkpoint = self.YOLO_VARIANT_MAP.get(model_type, "yolov8n.pt")
+            return ("yolo", checkpoint)
+        
+        return (model_type, None)
     
     def _load_model_apis(self):
         """Load all available model APIs"""
@@ -69,7 +98,7 @@ class GatedModelRouter:
         
         Args:
             image: PIL Image
-            model_type: Model to use ('csrnet', 'tmtb', 'yolo')
+            model_type: Model to use ('csrnet', 'tmtb', 'yolo', 'yolo-nano', 'yolo-small', etc.)
             source: Source type for preprocessing
             return_density_map: Return density map (CSRNet/TMTB only)
             return_boxes: Return bounding boxes (YOLO only)
@@ -77,19 +106,21 @@ class GatedModelRouter:
         Returns:
             Prediction results dictionary
         """
-        model_type = model_type.lower()
+        original_model_type = model_type
+        normalized_type, yolo_checkpoint = self._normalize_model_type(model_type)
         
-        if model_type not in self.model_apis:
+        if normalized_type not in self.model_apis:
             raise ValueError(f"Unknown model type: {model_type}")
         
-        api = self.model_apis[model_type]
+        api = self.model_apis[normalized_type]
         if api is None:
-            raise RuntimeError(f"Model {model_type} is not available")
+            raise RuntimeError(f"Model {normalized_type} is not available")
         
-        logger.info(f"🔀 Routing to {model_type.upper()} model")
+        logger.info(f"🔀 Routing to {normalized_type.upper()} model" + 
+                   (f" (checkpoint: {yolo_checkpoint})" if yolo_checkpoint else ""))
         
         # Route to appropriate model
-        if model_type == 'csrnet':
+        if normalized_type == 'csrnet':
             result = api.predict(
                 image,
                 source=source,
@@ -97,7 +128,7 @@ class GatedModelRouter:
             )
             result['model_name'] = 'CSRNet'
             
-        elif model_type == 'tmtb':
+        elif normalized_type == 'tmtb':
             result = api.predict(
                 image,
                 source=source,
@@ -105,16 +136,22 @@ class GatedModelRouter:
             )
             result['model_name'] = 'TMTB'
             
-        elif model_type == 'yolo':
+        elif normalized_type == 'yolo':
             result = api.predict(
                 image,
+                checkpoint_path=yolo_checkpoint,
                 source=source,
                 return_boxes=return_boxes
             )
-            result['model_name'] = 'YOLO'
+            # Set model name based on variant
+            variant_name = original_model_type.upper().replace("YOLO-", "YOLO-") if "-" in original_model_type else "YOLO-NANO"
+            result['model_name'] = variant_name
         
         else:
-            raise ValueError(f"Unsupported model: {model_type}")
+            raise ValueError(f"Unsupported model: {normalized_type}")
+        
+        # Store original model type for reference
+        result['original_model_type'] = original_model_type
         
         return result
     
@@ -128,30 +165,38 @@ class GatedModelRouter:
         Generate heatmap based on model type
         
         Args:
-            model_type: Model type
+            model_type: Model type (supports variants like 'yolo-xlarge')
             result: Prediction result
             original_image: Original image
         
         Returns:
             Heatmap image (numpy array in BGR format)
         """
-        model_type = model_type.lower()
-        api = self.model_apis[model_type]
+        normalized_type, _ = self._normalize_model_type(model_type)
+        api = self.model_apis[normalized_type]
         
         if api is None:
             return None
         
-        if model_type in ['csrnet', 'tmtb']:
+        if normalized_type in ['csrnet', 'tmtb']:
             # Density map based heatmap
             if 'density_map' in result:
                 return api.generate_heatmap(result['density_map'], original_image)
         
-        elif model_type == 'yolo':
+        elif normalized_type == 'yolo':
             # Box-based heatmap
             if 'boxes' in result and len(result['boxes']) > 0:
                 return api.generate_heatmap(result['boxes'], original_image)
         
         return None
+    
+    def is_yolo_variant(self, model_type: str) -> bool:
+        """Check if model type is a YOLO variant"""
+        return model_type.lower().startswith("yolo")
+    
+    def get_yolo_checkpoint(self, model_type: str) -> str:
+        """Get YOLO checkpoint path for a model type"""
+        return self.YOLO_VARIANT_MAP.get(model_type.lower(), "yolov8n.pt")
     
     def get_available_models(self) -> list:
         """Get list of available models"""

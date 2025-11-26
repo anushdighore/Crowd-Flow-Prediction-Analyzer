@@ -27,9 +27,42 @@ export default function HeatmapCard({
   error = null,
   title = "CSRNet Density Heatmap",
   showOriginalImage = false,
+  enableHeatmap = true, // NEW: Flag to check if heatmap should be expected
+  selectedModel = "CSRNet", // NEW: Current model to determine if heatmap is applicable
 }) {
-  // Don't render if no heatmap available
+  // Enhanced conditional rendering - show waiting state if heatmap expected
   if (!heatmapImage && !isLoading && !error) {
+    // Density models that support heatmaps
+    const densityModels = ["CSRNet", "MCNN", "VMamba"];
+
+    // Show "waiting" message if heatmap is enabled and using a density model
+    if (enableHeatmap && densityModels.includes(selectedModel)) {
+      return (
+        <div className="csrnet-heatmap-card">
+          <div className="heatmap-card-header">
+            <h3 className="heatmap-card-title">🔥 {title}</h3>
+          </div>
+          <div className="heatmap-card-content">
+            <div className="heatmap-loading">
+              <div className="loading-spinner"></div>
+              <p>⏳ Waiting for heatmap data...</p>
+              <p
+                style={{
+                  fontSize: "0.85rem",
+                  color: "#666",
+                  marginTop: "0.5rem",
+                }}
+              >
+                Make sure "Enable Heatmap" is ON and using a density model
+                (CSRNet/MCNN/VMamba)
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Don't render for YOLO or when heatmap disabled
     return null;
   }
 

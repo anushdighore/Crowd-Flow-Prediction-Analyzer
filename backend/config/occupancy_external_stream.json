@@ -1,0 +1,6 @@
+{
+  "max_capacity": 1,
+  "alert_threshold": 68,
+  "reset_threshold": 63,
+  "window_size_seconds": 3
+}
